@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "skills": {
+    "remotion-best-practices": {
+      "source": "remotion-dev/skills",
+      "sourceType": "github",
+      "computedHash": "7b8684825df186314a85cc61a83d0587cd61f824103ee546aef877a10f4f9255"
+    },
+    "spline-3d-integration": {
+      "source": "fawaz-i/spline-3d-integration",
+      "sourceType": "github",
+      "computedHash": "afd0558c064153ecac32e13ea98669f05cd1a16b2b7955e7c10f02cfe0a5814d"
+    }
+  }
+}

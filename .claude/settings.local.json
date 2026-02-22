@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"/c/Users/heywrld/Desktop/AI- agents/AI-customer-service\" && npx skills add https://github.com/fawaz-i/spline-3d-integration --skill spline-3d-integration 2>&1)",
+      "Bash(cd \"/c/Users/heywrld/Desktop/AI- agents/AI-customer-service\" && npx skills add https://github.com/remotion-dev/skills --skill remotion-best-practices 2>&1)",
+      "Bash(cd \"/c/Users/heywrld/Desktop/AI- agents/AI-customer-service\" && npx skills add https://github.com/fawaz-i/spline-3d-integration --skill spline-3d-integration --yes 2>&1)",
+      "Bash(cd \"/c/Users/heywrld/Desktop/AI- agents/AI-customer-service/packages/voice\" && npx tsc --noEmit 2>&1)",
+      "mcp__Neon__get_database_tables",
+      "Bash(cd \"C:/Users/heywrld/Desktop/AI- agents/AI-customer-service\" && DATABASE_URL=\"postgresql://neondb_owner:npg_3KBOxP8YTsqS@ep-proud-mountain-ai8uzsdq-pooler.c-4.us-east-1.aws.neon.tech/neondb?channel_binding=require&sslmode=require\" pnpm --filter @han/database db:generate 2>&1)",
+      "Bash(ls:*)",
+      "mcp__Neon__list_projects",
+      "mcp__Neon__run_sql",
+      "Bash(taskkill:*)"
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@han/voice",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@deepgram/sdk": "^3.9.0",
+    "@elevenlabs/elevenlabs-js": "^2.36.0",
+    "twilio": "^5.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

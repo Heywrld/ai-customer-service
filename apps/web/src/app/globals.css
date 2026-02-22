@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --han-gradient: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+    --han-gradient-dark: linear-gradient(135deg, #38bdf8 0%, #22d3ee 100%);
+    --han-glow: 0 0 60px rgba(14, 165, 233, 0.3);
+    --han-glow-strong: 0 0 120px rgba(14, 165, 233, 0.5);
+  }
+}
+
+@layer utilities {
+  .han-gradient {
+    background: var(--han-gradient);
+  }
+
+  .han-gradient-text {
+    background: var(--han-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .han-glow {
+    box-shadow: var(--han-glow);
+  }
+
+  .han-glow-strong {
+    box-shadow: var(--han-glow-strong);
+  }
+
+  .noise-bg {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  }
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}

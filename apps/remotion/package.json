@@ -1,0 +1,27 @@
+{
+  "name": "@han/remotion",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    "./tokens": "./src/tokens.ts",
+    "./HanDemo": "./src/HanDemo.tsx"
+  },
+  "scripts": {
+    "dev": "npx remotion studio src/index.ts",
+    "render": "npx remotion render src/index.ts HanDemo out/han-demo.mp4 --codec=h264",
+    "render:gif": "npx remotion render src/index.ts HanDemo out/han-demo.gif --codec=gif",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "remotion": "^4.0.427",
+    "@remotion/cli": "^4.0.427",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "@types/node": "^22.10.2"
+  }
+}
