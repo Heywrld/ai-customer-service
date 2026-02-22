@@ -8,11 +8,17 @@ export async function POST(req: NextRequest) {
   const params = new URLSearchParams(rawBody);
   const to = params.get("To") ?? "";           // the Twilio number that was called
   const calledNumber = to.replace(/^\+/, "+"); // normalize
+  console.log("[Voice] Incoming call To:", to, "| normalized:", calledNumber);
+
+  // Ensure DB connection is alive (Neon auto-suspends)
+  await db.$connect().catch(() => {});
 
   // Look up business by voice phone number
   const business = await db.business.findFirst({
     where: { phoneNumber: calledNumber, isActive: true },
   }).catch((err) => { console.error("[Voice] DB lookup error:", err); return null; });
+
+  console.log("[Voice] Business found:", business?.name ?? "NONE");
 
   const businessName = business?.name ?? "this business";
 

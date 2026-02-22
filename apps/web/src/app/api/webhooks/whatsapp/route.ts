@@ -32,6 +32,7 @@ import {
   logUsage,
 } from "@han/ai";
 import type { FAQTemplate } from "@han/ai";
+import { getPlanStatus } from "@/lib/plan";
 
 // ─── Twilio signature validation ─────────────────────────────────────────────
 function validateTwilioSignature(req: NextRequest, body: string): boolean {
@@ -104,7 +105,31 @@ async function processAndReply(fromNumber: string, toNumber: string, incomingMes
       return;
     }
 
-    // 2. Find or create the customer
+    // 2. Reset monthly count if billing period rolled over
+    let callsUsed = business.monthlyCallCount;
+    if (business.callCountResetAt < new Date()) {
+      const nextReset = new Date();
+      nextReset.setMonth(nextReset.getMonth() + 1);
+      nextReset.setDate(1);
+      nextReset.setHours(0, 0, 0, 0);
+      await db.business.update({
+        where: { id: business.id },
+        data: { monthlyCallCount: 0, callCountResetAt: nextReset },
+      }).catch(() => null);
+      callsUsed = 0;
+    }
+
+    // 3. Enforce plan limits
+    const planStatus = getPlanStatus({ ...business, monthlyCallCount: callsUsed });
+    if (!planStatus.allowed) {
+      const msg = planStatus.isTrialExpired
+        ? `Your 14-day free trial has ended. Visit ${process.env.NEXT_PUBLIC_APP_URL ?? "your dashboard"} to upgrade and keep Han answering your customers. 🙏`
+        : `You've used all ${planStatus.callsLimit} messages on your plan this month. Upgrade at ${process.env.NEXT_PUBLIC_APP_URL ?? "your dashboard"} to continue. 🚀`;
+      await sendWhatsAppReply(fromNumber, toNumber, msg);
+      return;
+    }
+
+    // 4. Find or create the customer
     const phoneNumber = fromNumber;
     const usesPidgin = detectsPidgin(incomingMessage);
 
@@ -253,7 +278,7 @@ async function processAndReply(fromNumber: string, toNumber: string, incomingMes
     // 12. Cache the response for future identical questions
     await setCached(business.id, incomingMessage, replyText);
 
-    // 13. Save assistant reply + update conversation
+    // 13. Save assistant reply + update conversation + increment call count
     await db.message.create({
       data: { conversationId: conversation.id, role: "assistant", content: replyText },
     });
@@ -261,6 +286,10 @@ async function processAndReply(fromNumber: string, toNumber: string, incomingMes
       where: { id: conversation.id },
       data: { messageCount: { increment: 2 }, updatedAt: new Date() },
     });
+    await db.business.update({
+      where: { id: business.id },
+      data: { monthlyCallCount: { increment: 1 } },
+    }).catch(() => null);
 
     // 14. Log usage (non-blocking)
     logUsage({

@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { name, industry, city, systemPrompt, whatsappNumber } = body;
+  const { name, industry, city, systemPrompt, whatsappNumber, phoneNumber, phoneNumberProvider } = body;
 
   if (!name) return NextResponse.json({ error: "Business name required" }, { status: 400 });
 
@@ -34,6 +34,8 @@ export async function POST(req: NextRequest) {
       city: city ?? "Lagos",
       systemPrompt: systemPrompt ?? null,
       whatsappNumber: whatsappNumber ?? null,
+      phoneNumber: phoneNumber ?? null,
+      phoneNumberProvider: phoneNumberProvider ?? "byon",
     },
     update: {
       name,
@@ -41,6 +43,9 @@ export async function POST(req: NextRequest) {
       city: city ?? undefined,
       systemPrompt: systemPrompt ?? undefined,
       whatsappNumber: whatsappNumber ?? undefined,
+      // Only update phoneNumber/provider if explicitly provided
+      ...(phoneNumber !== undefined && { phoneNumber }),
+      ...(phoneNumberProvider !== undefined && { phoneNumberProvider }),
       updatedAt: new Date(),
     },
   });
@@ -55,6 +60,11 @@ export async function PUT(req: NextRequest) {
 
   const body = await req.json();
 
+  // Don't let the settings form overwrite a Han-managed number or its provider.
+  // phoneNumberSid is never accepted from the client.
+  const existing = await db.business.findUnique({ where: { clerkUserId: userId } });
+  const isHanManaged = existing?.phoneNumberProvider === "han_twilio";
+
   const business = await db.business.update({
     where: { clerkUserId: userId },
     data: {
@@ -63,7 +73,12 @@ export async function PUT(req: NextRequest) {
       city: body.city ?? undefined,
       systemPrompt: body.systemPrompt ?? undefined,
       whatsappNumber: body.whatsappNumber ?? undefined,
-      phoneNumber: body.phoneNumber ?? undefined,
+      // BYON: allow updating phoneNumber + provider from settings
+      // Han-managed: locked — changes go through /api/numbers routes
+      ...(!isHanManaged && {
+        phoneNumber: body.phoneNumber ?? undefined,
+        phoneNumberProvider: body.phoneNumberProvider ?? undefined,
+      }),
       updatedAt: new Date(),
     },
   });

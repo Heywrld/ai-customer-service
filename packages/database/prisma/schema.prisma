@@ -18,9 +18,15 @@ model Business {
   city           String?  @default("Lagos")
   systemPrompt   String?  @map("system_prompt")
   businessHours  Json?    @default("{\"mon_fri\": {\"open\": \"09:00\", \"close\": \"19:00\"}, \"sat\": {\"open\": \"10:00\", \"close\": \"20:00\"}, \"sun\": null}") @map("business_hours")
-  voiceId        String?  @default("21m00Tcm4TlvDq8ikWAM") @map("voice_id") // ElevenLabs voice ID
-  isActive       Boolean  @default(true) @map("is_active")
-  plan           String?  @default("starter")
+  voiceId               String?  @default("21m00Tcm4TlvDq8ikWAM") @map("voice_id")
+  phoneNumberProvider   String   @default("byon") @map("phone_number_provider") // "han_twilio" | "byon"
+  phoneNumberSid        String?  @map("phone_number_sid")   // Twilio SID — for management/release
+  whatsappProvider      String   @default("byon") @map("whatsapp_provider")     // "byon" only for now
+  isActive              Boolean  @default(true) @map("is_active")
+  plan           String   @default("trial") @map("plan")
+  trialEndsAt    DateTime @default(dbgenerated("now() + interval '14 days'")) @map("trial_ends_at")
+  monthlyCallCount  Int   @default(0) @map("monthly_call_count")
+  callCountResetAt  DateTime @default(dbgenerated("date_trunc('month', now()) + interval '1 month'")) @map("call_count_reset_at")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 

@@ -8,6 +8,10 @@ import {
   CheckCircle,
   Users,
   ArrowRight,
+  Phone,
+  MessageCircle,
+  ChevronRight,
+  AlertCircle,
 } from "lucide-react";
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
@@ -51,6 +55,110 @@ function ProgressBar({ label, pct, color = "bg-sky-500" }: { label: string; pct:
   );
 }
 
+// ─── Setup Checklist ──────────────────────────────────────────────────────────
+function SetupChecklist({
+  hasVoice,
+  hasWhatsApp,
+  hasFaqs,
+}: {
+  hasVoice: boolean;
+  hasWhatsApp: boolean;
+  hasFaqs: boolean;
+}) {
+  const allDone = hasVoice && hasWhatsApp && hasFaqs;
+  if (allDone) return null;
+
+  const items = [
+    {
+      done: hasVoice,
+      icon: Phone,
+      label: "Activate your voice number",
+      sub: "Give customers a number to call Han",
+      href: "/dashboard/settings#voice",
+      cta: "Set up",
+    },
+    {
+      done: hasWhatsApp,
+      icon: MessageCircle,
+      label: "Connect WhatsApp",
+      sub: "Let customers message you on WhatsApp",
+      href: "/dashboard/channels/whatsapp",
+      cta: "Connect",
+    },
+    {
+      done: hasFaqs,
+      icon: MessageSquare,
+      label: "Add your first FAQ",
+      sub: "Teach Han to answer common questions instantly",
+      href: "/dashboard/faqs",
+      cta: "Add FAQs",
+    },
+  ];
+
+  const doneCount = items.filter((i) => i.done).length;
+  const pct = Math.round((doneCount / items.length) * 100);
+
+  return (
+    <div className="mb-8 bg-white border border-slate-200 rounded-xl overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 text-amber-500" />
+          <span className="text-sm font-semibold text-slate-800">Finish setting up Han</span>
+        </div>
+        <span className="text-xs text-slate-400">{doneCount}/{items.length} done</span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-1 bg-slate-100">
+        <div
+          className="h-full bg-emerald-500 transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
+      {/* Items */}
+      <ul className="divide-y divide-slate-100">
+        {items.map((item) => {
+          const Icon = item.icon;
+          return (
+            <li key={item.label}>
+              {item.done ? (
+                <div className="flex items-center gap-4 px-5 py-3.5 opacity-50">
+                  <div className="h-8 w-8 rounded-full bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                    <CheckCircle className="h-4 w-4 text-emerald-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-700 line-through">{item.label}</p>
+                    <p className="text-xs text-slate-400">{item.sub}</p>
+                  </div>
+                </div>
+              ) : (
+                <Link
+                  href={item.href}
+                  className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors group"
+                >
+                  <div className="h-8 w-8 rounded-full bg-sky-50 flex items-center justify-center flex-shrink-0">
+                    <Icon className="h-4 w-4 text-sky-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-800">{item.label}</p>
+                    <p className="text-xs text-slate-500">{item.sub}</p>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs font-medium text-sky-500 group-hover:text-sky-600 shrink-0">
+                    {item.cta}
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </div>
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export default async function DashboardPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
@@ -69,7 +177,7 @@ export default async function DashboardPage() {
   today.setHours(0, 0, 0, 0);
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-  const [chatsToday, activeConvs, weekUsage, recentConvs] = await Promise.all([
+  const [chatsToday, activeConvs, weekUsage, recentConvs, faqCount] = await Promise.all([
     db.conversation.count({ where: { businessId: business.id, createdAt: { gte: today } } }),
     db.conversation.count({ where: { businessId: business.id, status: "active" } }),
     db.aiUsage.findMany({ where: { businessId: business.id, createdAt: { gte: weekAgo } } }),
@@ -82,6 +190,7 @@ export default async function DashboardPage() {
       orderBy: { updatedAt: "desc" },
       take: 5,
     }),
+    db.faqTemplate.count({ where: { businessId: business.id, isActive: true } }),
   ]);
 
   // Compute stats
@@ -128,6 +237,13 @@ export default async function DashboardPage() {
         </h1>
         <p className="text-slate-500 text-sm mt-1">Here&apos;s what Han is doing for {business.name}</p>
       </div>
+
+      {/* Setup checklist — only shown when setup is incomplete */}
+      <SetupChecklist
+        hasVoice={!!business.phoneNumber}
+        hasWhatsApp={!!business.whatsappNumber}
+        hasFaqs={faqCount > 0}
+      />
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

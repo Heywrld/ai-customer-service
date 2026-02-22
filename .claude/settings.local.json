@@ -10,7 +10,9 @@
       "Bash(ls:*)",
       "mcp__Neon__list_projects",
       "mcp__Neon__run_sql",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(curl:*)",
+      "WebSearch"
     ]
   }
 }

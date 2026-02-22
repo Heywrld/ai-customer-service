@@ -149,12 +149,23 @@ export function Hero() {
           <span className="han-gradient-text">instant answers.</span>
         </motion.h1>
 
-        {/* Subheadline */}
+        {/* Slogan */}
         <motion.p
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55, delay: 0.26 }}
-          className="mt-6 text-lg sm:text-xl text-slate-400 max-w-2xl leading-relaxed"
+          className="mt-6 text-xl sm:text-2xl font-semibold text-white max-w-2xl leading-relaxed"
+        >
+          Han costs less than one employee
+          <span className="han-gradient-text"> and works harder than ten.</span>
+        </motion.p>
+
+        {/* Subheadline */}
+        <motion.p
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, delay: 0.32 }}
+          className="mt-4 text-lg sm:text-xl text-slate-400 max-w-2xl leading-relaxed"
         >
           Han answers your WhatsApp messages and phone calls 24/7 — so
           Nigerian businesses never miss a sale. Speaks Pidgin. Understands

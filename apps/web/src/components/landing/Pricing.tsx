@@ -8,13 +8,14 @@ import { cn } from "@/lib/utils";
 const tiers = [
   {
     name: "Starter",
-    naira: "₦15,000",
-    usd: "$9",
+    naira: "₦35,000",
+    usd: "$23",
     period: "/month",
-    description: "For small businesses just getting started.",
-    conversations: "500 conversations",
+    description: "For small businesses getting started with AI support.",
+    conversations: "300 calls/month",
     features: [
-      "WhatsApp integration",
+      "1 default AI voice",
+      "WhatsApp + Voice",
       "Pidgin language support",
       "Basic FAQ manager",
       "Conversation history",
@@ -24,41 +25,60 @@ const tiers = [
     highlighted: false,
   },
   {
-    name: "Growth",
-    naira: "₦45,000",
-    usd: "$27",
+    name: "Business",
+    naira: "₦85,000",
+    usd: "$55",
     period: "/month",
     description: "For growing businesses with steady customer volume.",
-    conversations: "2,000 conversations",
+    conversations: "700 calls/month",
     features: [
       "Everything in Starter",
-      "Voice call handling",
+      "5 curated AI voices",
+      "No Han branding",
       "Advanced analytics",
       "Cost optimization dashboard",
       "Priority support",
-      "Human takeover",
     ],
     cta: "Start free trial",
     highlighted: true,
     badge: "Most popular",
   },
   {
-    name: "Scale",
-    naira: "₦120,000",
-    usd: "$72",
+    name: "Pro",
+    naira: "₦175,000",
+    usd: "$113",
     period: "/month",
-    description: "For high-volume businesses across multiple locations.",
-    conversations: "Unlimited",
+    description: "For high-volume businesses that demand the best.",
+    conversations: "1,500 calls/month",
     features: [
-      "Everything in Growth",
-      "Multiple WhatsApp numbers",
-      "Custom AI persona",
-      "Paystack integration",
+      "Everything in Business",
+      "All ElevenLabs voices",
+      "Priority response speed",
+      "Multiple numbers",
       "Dedicated account manager",
       "SLA guarantee",
     ],
+    cta: "Start free trial",
+    highlighted: false,
+  },
+  {
+    name: "Enterprise",
+    naira: "₦350,000",
+    usd: "$226",
+    period: "/month",
+    description: "Your voice. Answering every customer call, 24/7.",
+    conversations: "Unlimited calls",
+    features: [
+      "Everything in Pro",
+      "Custom voice clone",
+      "Your voice answers calls",
+      "Unlimited calls",
+      "Custom AI persona",
+      "White-glove onboarding",
+    ],
     cta: "Contact us",
     highlighted: false,
+    badge: "Voice Clone",
   },
 ];
 
@@ -78,9 +98,9 @@ export function Pricing() {
             variants={staggerItem}
             className="text-4xl sm:text-5xl font-bold text-white mb-4"
           >
-            Less than one staff member.
+            Less than one employee.
             <br />
-            <span className="han-gradient-text">Better than ten.</span>
+            <span className="han-gradient-text">Works harder than ten.</span>
           </motion.h2>
           <motion.p variants={staggerItem} className="text-slate-400 text-lg">
             All plans include a 14-day free trial. No credit card required.
@@ -88,7 +108,7 @@ export function Pricing() {
         </StaggerContainer>
 
         {/* Tier grid */}
-        <StaggerContainer className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch">
+        <StaggerContainer className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 items-stretch">
           {tiers.map((tier) => (
             <motion.div
               key={tier.name}

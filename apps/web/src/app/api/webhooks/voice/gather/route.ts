@@ -8,30 +8,10 @@ import {
   compressPrompt,
   logUsage,
 } from "@han/ai";
-import { randomUUID } from "crypto";
+import { storeAudio, getAudio } from "@/lib/audioCache";
+import { getPlanStatus } from "@/lib/plan";
 
-// In-memory audio cache: id → MP3 buffer (TTL 5 min)
-const audioCache = new Map<string, { buffer: Buffer; expiresAt: number }>();
-
-// Prune expired audio every 5 min
-setInterval(() => {
-  const now = Date.now();
-  for (const [id, entry] of audioCache) {
-    if (entry.expiresAt < now) audioCache.delete(id);
-  }
-}, 5 * 60 * 1000);
-
-export async function storeAudio(buffer: Buffer): Promise<string> {
-  const id = randomUUID();
-  audioCache.set(id, { buffer, expiresAt: Date.now() + 5 * 60 * 1000 });
-  return id;
-}
-
-export function getAudio(id: string): Buffer | null {
-  const entry = audioCache.get(id);
-  if (!entry || entry.expiresAt < Date.now()) return null;
-  return entry.buffer;
-}
+export { getAudio }; // keep export so existing callers don't break
 
 function escapeXml(t: string) {
   return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -62,7 +42,7 @@ export async function POST(req: NextRequest) {
     if (hasElevenLabs) {
       const { textToSpeech } = await import("@han/voice");
       const buf = await textToSpeech(fallback).catch(() => null);
-      if (buf) audioUrl = `${baseUrl}/api/voice/audio/${await storeAudio(buf)}`;
+      if (buf) audioUrl = `${baseUrl}/api/voice/audio/${storeAudio(buf)}`;
     }
     return twimlResponse(twimlSay(fallback, hasElevenLabs, audioUrl), baseUrl);
   }
@@ -70,11 +50,32 @@ export async function POST(req: NextRequest) {
   // Look up business by voice phone number
   const business = await db.business.findFirst({
     where: { phoneNumber: calledNumber, isActive: true },
-  }).catch(() => null);
+  }).catch((err) => { console.error("[Voice] DB lookup error:", err); return null; });
 
   if (!business) {
     const msg = "Sorry, this number is not configured. Please try again later.";
-    return twimlResponse(twimlSay(msg, false), baseUrl);
+    return twimlResponse(twimlSay(msg, false), baseUrl, true);
+  }
+
+  // Reset monthly call count if billing period has rolled over
+  let callsUsed = business.monthlyCallCount;
+  if (business.callCountResetAt < new Date()) {
+    const nextReset = new Date();
+    nextReset.setMonth(nextReset.getMonth() + 1);
+    nextReset.setDate(1);
+    nextReset.setHours(0, 0, 0, 0);
+    await db.business.update({
+      where: { id: business.id },
+      data: { monthlyCallCount: 0, callCountResetAt: nextReset },
+    }).catch(() => null);
+    callsUsed = 0;
+  }
+
+  // Enforce plan limits
+  const planStatus = getPlanStatus({ ...business, monthlyCallCount: callsUsed });
+  if (!planStatus.allowed) {
+    const msg = planStatus.reason ?? "Your account limit has been reached. Please visit your dashboard to upgrade.";
+    return twimlResponse(twimlSay(msg, false), baseUrl, true);
   }
 
   // Find or create caller as customer
@@ -116,7 +117,7 @@ export async function POST(req: NextRequest) {
     if (hasElevenLabs) {
       const { textToSpeech } = await import("@han/voice");
       const buf = await textToSpeech(cached, business.voiceId ?? undefined).catch(() => null);
-      if (buf) audioUrl = `${baseUrl}/api/voice/audio/${await storeAudio(buf)}`;
+      if (buf) audioUrl = `${baseUrl}/api/voice/audio/${storeAudio(buf)}`;
     }
     return twimlResponse(twimlSay(cached, hasElevenLabs, audioUrl), baseUrl);
   }
@@ -145,7 +146,7 @@ export async function POST(req: NextRequest) {
     ? aiResponse.content[0].text
     : "I'm sorry, I had trouble with that. Could you please repeat your question?";
 
-  // Save + cache
+  // Save + cache + increment call count
   if (conversation) {
     await db.message.create({
       data: { conversationId: conversation.id, role: "assistant", content: replyText },
@@ -155,6 +156,10 @@ export async function POST(req: NextRequest) {
       data: { messageCount: { increment: 2 } },
     }).catch(() => null);
   }
+  await db.business.update({
+    where: { id: business.id },
+    data: { monthlyCallCount: { increment: 1 } },
+  }).catch(() => null);
   await setCached(business.id, transcript, replyText);
   await logUsage({
     businessId: business.id,
@@ -173,7 +178,7 @@ export async function POST(req: NextRequest) {
     try {
       const { textToSpeech } = await import("@han/voice");
       const buf = await textToSpeech(replyText, business.voiceId ?? undefined);
-      audioUrl = `${baseUrl}/api/voice/audio/${await storeAudio(buf)}`;
+      audioUrl = `${baseUrl}/api/voice/audio/${storeAudio(buf)}`;
     } catch (err) {
       console.error("[Voice] ElevenLabs TTS failed:", err);
     }
@@ -182,8 +187,14 @@ export async function POST(req: NextRequest) {
   return twimlResponse(twimlSay(replyText, hasElevenLabs, audioUrl), baseUrl);
 }
 
-function twimlResponse(speakTag: string, baseUrl: string): NextResponse {
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+function twimlResponse(speakTag: string, baseUrl: string, hangup = false): NextResponse {
+  const xml = hangup
+    ? `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  ${speakTag}
+  <Hangup/>
+</Response>`
+    : `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   ${speakTag}
   <Gather input="speech" action="${baseUrl}/api/webhooks/voice/gather" method="POST"

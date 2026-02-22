@@ -9,7 +9,7 @@ export interface UsageRecord {
   outputTokens: number;
   cacheHit: boolean;
   faqMatched: boolean;
-  queryType: "simple" | "complex" | "summarize" | "faq" | "cached";
+  queryType: "simple" | "complex" | "summarize" | "faq" | "cached" | "voice";
 }
 
 /**

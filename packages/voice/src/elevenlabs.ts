@@ -73,6 +73,34 @@ export async function textToSpeech(
 }
 
 /**
+ * Transcribe audio buffer to text using ElevenLabs STT.
+ * @param audioBuffer - MP3/WAV audio buffer from AT recording
+ */
+export async function speechToText(audioBuffer: Buffer): Promise<string> {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) throw new Error("Missing ELEVENLABS_API_KEY");
+
+  const formData = new FormData();
+  const blob = new Blob([audioBuffer], { type: "audio/mpeg" });
+  formData.append("file", blob, "recording.mp3");
+  formData.append("model_id", "scribe_v1");
+
+  const res = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
+    method: "POST",
+    headers: { "xi-api-key": apiKey },
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`ElevenLabs STT error: ${res.status} ${err}`);
+  }
+
+  const data = await res.json() as { text: string };
+  return data.text?.trim() ?? "";
+}
+
+/**
  * Stream TTS chunks directly (lower latency than buffering).
  * @param voiceId - Business's chosen ElevenLabs voice ID
  */
