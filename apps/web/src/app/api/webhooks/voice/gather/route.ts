@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHmac } from "crypto";
 import { db } from "@han/database";
 import {
   createAIClient,
@@ -8,20 +9,22 @@ import {
   compressPrompt,
   logUsage,
 } from "@han/ai";
-import { storeAudio, getAudio } from "@/lib/audioCache";
 import { getPlanStatus } from "@/lib/plan";
 
-export { getAudio }; // keep export so existing callers don't break
+const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM";
+
+function buildTtsUrl(baseUrl: string, text: string, voiceId: string): string {
+  const ts = Date.now().toString();
+  const t = Buffer.from(text).toString("base64url");
+  const sig = createHmac("sha256", process.env.CLERK_SECRET_KEY ?? "han-tts-secret")
+    .update(`${t}:${voiceId}:${ts}`)
+    .digest("hex");
+  const p = Buffer.from(JSON.stringify({ t, v: voiceId, ts, sig })).toString("base64url");
+  return `${baseUrl}/api/tts?p=${p}`;
+}
 
 function escapeXml(t: string) {
   return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function twimlSay(text: string, useElevenLabs: boolean, audioUrl?: string): string {
-  if (useElevenLabs && audioUrl) {
-    return `<Play>${escapeXml(audioUrl)}</Play>`;
-  }
-  return `<Say voice="Polly.Joanna" language="en-NG">${escapeXml(text)}</Say>`;
 }
 
 export async function POST(req: NextRequest) {
@@ -33,31 +36,28 @@ export async function POST(req: NextRequest) {
   const callerNumber = params.get("From") ?? "";
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? req.nextUrl.origin;
-  const hasElevenLabs = !!process.env.ELEVENLABS_API_KEY;
 
-  // Nothing heard
-  if (!transcript) {
-    const fallback = "Sorry, I didn't catch that. Could you please repeat?";
-    let audioUrl: string | undefined;
-    if (hasElevenLabs) {
-      const { textToSpeech } = await import("@han/voice");
-      const buf = await textToSpeech(fallback).catch(() => null);
-      if (buf) audioUrl = `${baseUrl}/api/voice/audio/${storeAudio(buf)}`;
-    }
-    return twimlResponse(twimlSay(fallback, hasElevenLabs, audioUrl), baseUrl);
-  }
+  console.log("[Voice Gather] Transcript:", transcript, "| To:", calledNumber);
 
-  // Look up business by voice phone number
+  // Business lookup first — so every response uses the business's voice
   const business = await db.business.findFirst({
     where: { phoneNumber: calledNumber, isActive: true },
-  }).catch((err) => { console.error("[Voice] DB lookup error:", err); return null; });
+  }).catch((err) => { console.error("[Voice Gather] DB error:", err); return null; });
 
-  if (!business) {
-    const msg = "Sorry, this number is not configured. Please try again later.";
-    return twimlResponse(twimlSay(msg, false), baseUrl, true);
+  console.log("[Voice Gather] Business:", business?.name ?? "NONE");
+
+  const voiceId = business?.voiceId ?? DEFAULT_VOICE_ID;
+
+  if (!transcript) {
+    const fallback = "Sorry, I didn't catch that. Could you please repeat?";
+    return twimlResponse(`<Play>${buildTtsUrl(baseUrl, fallback, voiceId)}</Play>`, baseUrl);
   }
 
-  // Reset monthly call count if billing period has rolled over
+  if (!business) {
+    return twimlResponse(`<Say>${escapeXml("Sorry, this number is not configured.")}</Say>`, baseUrl, true);
+  }
+
+  // Reset monthly call count if billing period rolled over
   let callsUsed = business.monthlyCallCount;
   if (business.callCountResetAt < new Date()) {
     const nextReset = new Date();
@@ -71,21 +71,29 @@ export async function POST(req: NextRequest) {
     callsUsed = 0;
   }
 
-  // Enforce plan limits
   const planStatus = getPlanStatus({ ...business, monthlyCallCount: callsUsed });
   if (!planStatus.allowed) {
-    const msg = planStatus.reason ?? "Your account limit has been reached. Please visit your dashboard to upgrade.";
-    return twimlResponse(twimlSay(msg, false), baseUrl, true);
+    const msg = planStatus.reason ?? "Your account limit has been reached. Please upgrade.";
+    return twimlResponse(`<Play>${buildTtsUrl(baseUrl, msg, business.voiceId ?? DEFAULT_VOICE_ID)}</Play>`, baseUrl, true);
   }
 
-  // Find or create caller as customer
-  const customer = await db.customer.upsert({
-    where: { businessId_phoneNumber: { businessId: business.id, phoneNumber: callerNumber } },
-    create: { businessId: business.id, phoneNumber: callerNumber },
-    update: { lastSeenAt: new Date() },
-  }).catch(() => null);
+  // ── Opt 1: Parallelize customer upsert + cache check ──────────────────────
+  const [customer, cached] = await Promise.all([
+    db.customer.upsert({
+      where: { businessId_phoneNumber: { businessId: business.id, phoneNumber: callerNumber } },
+      create: { businessId: business.id, phoneNumber: callerNumber },
+      update: { lastSeenAt: new Date() },
+    }).catch(() => null),
+    getCached(business.id, transcript),
+  ]);
 
-  // Find or create active voice conversation
+  // ── Cache hit: skip Claude entirely ───────────────────────────────────────
+  if (cached) {
+    console.log("[Voice Gather] Cache hit");
+    return twimlResponse(`<Play>${buildTtsUrl(baseUrl, cached, voiceId)}</Play>`, baseUrl);
+  }
+
+  // ── Cache miss: conversation + Claude ─────────────────────────────────────
   let conversation = await db.conversation.findFirst({
     where: { businessId: business.id, customerId: customer?.id, channel: "voice", status: "active" },
     include: { messages: { orderBy: { createdAt: "asc" }, take: 10 } },
@@ -98,37 +106,16 @@ export async function POST(req: NextRequest) {
     }).catch(() => null);
   }
 
-  // Save user turn
+  // Fire-and-forget user message save — don't block Claude
   if (conversation) {
-    await db.message.create({
-      data: { conversationId: conversation.id, role: "user", content: transcript },
-    }).catch(() => null);
+    db.message.create({ data: { conversationId: conversation.id, role: "user", content: transcript } }).catch(() => null);
   }
 
-  // Cache check
-  const cached = await getCached(business.id, transcript);
-  if (cached) {
-    if (conversation) {
-      await db.message.create({
-        data: { conversationId: conversation.id, role: "assistant", content: cached, isCached: true },
-      }).catch(() => null);
-    }
-    let audioUrl: string | undefined;
-    if (hasElevenLabs) {
-      const { textToSpeech } = await import("@han/voice");
-      const buf = await textToSpeech(cached, business.voiceId ?? undefined).catch(() => null);
-      if (buf) audioUrl = `${baseUrl}/api/voice/audio/${storeAudio(buf)}`;
-    }
-    return twimlResponse(twimlSay(cached, hasElevenLabs, audioUrl), baseUrl);
-  }
-
-  // Call Claude
   const model = routeModel(transcript);
   const systemPrompt = compressPrompt(
     { id: business.id, name: business.name, systemPrompt: business.systemPrompt, industry: business.industry, city: business.city },
-    false // voice calls default to English
+    false
   );
-
   const history = (conversation?.messages ?? []).map((m) => ({
     role: m.role as "user" | "assistant",
     content: m.content,
@@ -137,54 +124,40 @@ export async function POST(req: NextRequest) {
   const ai = createAIClient();
   const aiResponse = await ai.messages.create({
     model,
-    max_tokens: 200, // keep voice responses short
+    max_tokens: 200,
     system: systemPrompt + "\n\nIMPORTANT: This is a voice call. Keep your response to 1-2 sentences maximum. No markdown, no bullet points.",
     messages: [...history, { role: "user", content: transcript }],
   });
 
   const replyText = aiResponse.content[0].type === "text"
     ? aiResponse.content[0].text
-    : "I'm sorry, I had trouble with that. Could you please repeat your question?";
+    : "I'm sorry, I had trouble with that. Could you please repeat?";
 
-  // Save + cache + increment call count
-  if (conversation) {
-    await db.message.create({
-      data: { conversationId: conversation.id, role: "assistant", content: replyText },
-    }).catch(() => null);
-    await db.conversation.update({
-      where: { id: conversation.id },
-      data: { messageCount: { increment: 2 } },
-    }).catch(() => null);
-  }
-  await db.business.update({
-    where: { id: business.id },
-    data: { monthlyCallCount: { increment: 1 } },
-  }).catch(() => null);
-  await setCached(business.id, transcript, replyText);
-  await logUsage({
-    businessId: business.id,
-    conversationId: conversation?.id,
-    model,
-    inputTokens: aiResponse.usage.input_tokens,
-    outputTokens: aiResponse.usage.output_tokens,
-    cacheHit: false,
-    faqMatched: false,
-    queryType: "voice",
-  }).catch(() => null);
+  console.log("[Voice Gather] Reply:", replyText);
 
-  // TTS via ElevenLabs
-  let audioUrl: string | undefined;
-  if (hasElevenLabs) {
-    try {
-      const { textToSpeech } = await import("@han/voice");
-      const buf = await textToSpeech(replyText, business.voiceId ?? undefined);
-      audioUrl = `${baseUrl}/api/voice/audio/${storeAudio(buf)}`;
-    } catch (err) {
-      console.error("[Voice] ElevenLabs TTS failed:", err);
-    }
-  }
+  // Fire-and-forget all DB writes + cache
+  Promise.all([
+    conversation
+      ? db.message.create({ data: { conversationId: conversation.id, role: "assistant", content: replyText } }).catch(() => null)
+      : null,
+    conversation
+      ? db.conversation.update({ where: { id: conversation.id }, data: { messageCount: { increment: 2 } } }).catch(() => null)
+      : null,
+    db.business.update({ where: { id: business.id }, data: { monthlyCallCount: { increment: 1 } } }).catch(() => null),
+    setCached(business.id, transcript, replyText).catch(() => null),
+    logUsage({
+      businessId: business.id,
+      conversationId: conversation?.id,
+      model,
+      inputTokens: aiResponse.usage.input_tokens,
+      outputTokens: aiResponse.usage.output_tokens,
+      cacheHit: false,
+      faqMatched: false,
+      queryType: "voice",
+    }).catch(() => null),
+  ]);
 
-  return twimlResponse(twimlSay(replyText, hasElevenLabs, audioUrl), baseUrl);
+  return twimlResponse(`<Play>${buildTtsUrl(baseUrl, replyText, voiceId)}</Play>`, baseUrl);
 }
 
 function twimlResponse(speakTag: string, baseUrl: string, hangup = false): NextResponse {
@@ -198,9 +171,8 @@ function twimlResponse(speakTag: string, baseUrl: string, hangup = false): NextR
 <Response>
   ${speakTag}
   <Gather input="speech" action="${baseUrl}/api/webhooks/voice/gather" method="POST"
-    speechTimeout="auto" language="en-NG" timeout="5">
+    speechTimeout="auto" language="en-US" timeout="5">
   </Gather>
-  <Say voice="Polly.Joanna">Is there anything else I can help you with?</Say>
 </Response>`;
 
   return new NextResponse(xml, { headers: { "Content-Type": "text/xml" } });

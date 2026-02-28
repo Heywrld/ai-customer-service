@@ -19,28 +19,72 @@ const statusBadge: Record<string, string> = {
   escalated: "bg-amber-100 text-amber-700",
 };
 
-export default async function ConversationsPage() {
+const TABS = [
+  { label: "All", value: "all" },
+  { label: "Active", value: "active" },
+  { label: "Resolved", value: "resolved" },
+];
+
+export default async function ConversationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
   const business = await db.business.findUnique({ where: { clerkUserId: userId } });
   if (!business) redirect("/dashboard/onboarding");
 
+  const { status: statusFilter } = await searchParams;
+  const activeTab = TABS.find((t) => t.value === statusFilter)?.value ?? "all";
+
   const conversations = await db.conversation.findMany({
-    where: { businessId: business.id },
+    where: {
+      businessId: business.id,
+      ...(activeTab !== "all" ? { status: activeTab } : {}),
+    },
     include: {
       customer: { select: { name: true, phoneNumber: true, usesPidgin: true } },
       messages: { orderBy: { createdAt: "desc" }, take: 1 },
     },
     orderBy: { updatedAt: "desc" },
-    take: 100,
+    take: 50,
+  });
+
+  const totalCount = await db.conversation.count({
+    where: {
+      businessId: business.id,
+      ...(activeTab !== "all" ? { status: activeTab } : {}),
+    },
   });
 
   return (
     <div className="max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Conversations</h1>
-        <p className="text-slate-500 text-sm mt-1">{conversations.length} total</p>
+        <p className="text-slate-500 text-sm mt-1">
+          {conversations.length < totalCount
+            ? `Showing ${conversations.length} of ${totalCount}`
+            : `${totalCount} total`}
+        </p>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="flex gap-1 bg-slate-100 p-1 rounded-lg w-fit mb-5">
+        {TABS.map((tab) => (
+          <Link
+            key={tab.value}
+            href={`/dashboard/conversations?status=${tab.value}`}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              activeTab === tab.value
+                ? "bg-white shadow-sm text-slate-800"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            {tab.label}
+          </Link>
+        ))}
       </div>
 
       {conversations.length === 0 ? (

@@ -1,6 +1,6 @@
 // Voice pipeline: Twilio (WhatsApp) + Africa's Talking (Voice) + ElevenLabs (TTS + STT)
 export { createTwilioClient } from "./twilio";
-export { transcribeAudio } from "./deepgram";
+export { transcribeAudio, transcribeBuffer } from "./deepgram";
 export { listVoices, textToSpeech, streamTextToSpeech, speechToText } from "./elevenlabs";
 export type { HanVoice } from "./elevenlabs";
 export {

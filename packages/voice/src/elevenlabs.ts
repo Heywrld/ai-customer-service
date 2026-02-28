@@ -57,8 +57,9 @@ export async function textToSpeech(
 
   const audioStream = await client.textToSpeech.convert(voiceId, {
     text,
-    modelId: "eleven_turbo_v2_5", // ~300ms latency
-    outputFormat: "mp3_44100_128",
+    modelId: "eleven_turbo_v2_5", // fastest model
+    outputFormat: "mp3_22050_32", // phone-quality, 75% smaller → faster generation + transfer
+    optimizeStreamingLatency: 3,  // ElevenLabs pipeline optimization (0=quality, 4=max speed)
     voiceSettings: {
       stability: 0.5,
       similarityBoost: 0.75,
@@ -114,7 +115,8 @@ export async function streamTextToSpeech(
   const audioStream = await client.textToSpeech.convert(voiceId, {
     text,
     modelId: "eleven_turbo_v2_5",
-    outputFormat: "mp3_44100_128",
+    outputFormat: "mp3_22050_32",
+    optimizeStreamingLatency: 3,
     voiceSettings: {
       stability: 0.5,
       similarityBoost: 0.75,

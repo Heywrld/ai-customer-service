@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAudio } from "@/lib/audioCache";
 
-// Serves ElevenLabs-generated MP3 audio for Twilio/AT to <Play>
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

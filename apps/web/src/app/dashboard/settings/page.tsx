@@ -155,6 +155,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   // Voice state
   const [voices, setVoices] = useState<VoiceOption[]>([]);
@@ -203,14 +204,21 @@ export default function SettingsPage() {
 
   const save = async () => {
     setSaving(true);
-    await fetch("/api/business", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    setSaveError("");
+    try {
+      const res = await fetch("/api/business", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch {
+      setSaveError("Failed to save changes. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const saveVoice = async (voiceId: string) => {
@@ -398,7 +406,7 @@ export default function SettingsPage() {
                 {form.plan === "enterprise" ? (
                   <button className="text-xs text-sky-600 font-medium hover:underline shrink-0">Set up →</button>
                 ) : (
-                  <Link href="#" className="text-xs bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg font-medium shrink-0 hover:bg-slate-300 transition-colors">
+                  <Link href="/dashboard/billing" className="text-xs bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg font-medium shrink-0 hover:bg-slate-300 transition-colors">
                     Upgrade
                   </Link>
                 )}
@@ -408,7 +416,7 @@ export default function SettingsPage() {
               {voices.some((v) => v.locked) && (
                 <p className="mt-3 text-xs text-slate-400 text-center">
                   🔒 Locked voices unlock on{" "}
-                  <Link href="#" className="text-sky-500 hover:underline">Business plan</Link>
+                  <Link href="/dashboard/billing" className="text-sky-500 hover:underline">Business plan</Link>
                   {" "}— 5 curated voices to choose from.
                 </p>
               )}
@@ -418,10 +426,16 @@ export default function SettingsPage() {
 
         {/* AI System Prompt */}
         <section className="bg-white border border-slate-200 rounded-xl p-6">
-          <h2 className="text-base font-semibold text-slate-800 mb-1">AI System Prompt</h2>
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-base font-semibold text-slate-800">AI System Prompt</h2>
+            <span className={`text-xs font-mono ${form.systemPrompt.length > 1800 ? "text-red-500" : "text-slate-400"}`}>
+              {form.systemPrompt.length}/2000
+            </span>
+          </div>
           <p className="text-xs text-slate-400 mb-4">Han uses this to understand your business and answer customer questions</p>
           <textarea value={form.systemPrompt} onChange={(e) => set("systemPrompt", e.target.value)}
             rows={8}
+            maxLength={2000}
             className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-400 resize-none" />
         </section>
 
@@ -432,22 +446,27 @@ export default function SettingsPage() {
               <h2 className="text-base font-semibold text-slate-800">Plan</h2>
               <p className="text-sm text-slate-500 mt-0.5 capitalize">{form.plan} plan</p>
             </div>
-            <button className="text-sm text-sky-500 hover:text-sky-600 font-medium">Upgrade →</button>
+            <Link href="/dashboard/billing" className="text-sm text-sky-500 hover:text-sky-600 font-medium">Upgrade →</Link>
           </div>
         </section>
       </div>
 
       {/* Save button */}
-      <div className="mt-6 flex items-center gap-3">
-        <button onClick={save} disabled={saving}
-          className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Save changes
-        </button>
-        {saved && (
-          <div className="flex items-center gap-1.5 text-emerald-600 text-sm">
-            <CheckCircle className="h-4 w-4" /> Saved!
-          </div>
+      <div className="mt-6 space-y-3">
+        <div className="flex items-center gap-3">
+          <button onClick={save} disabled={saving}
+            className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Save changes
+          </button>
+          {saved && (
+            <div className="flex items-center gap-1.5 text-emerald-600 text-sm">
+              <CheckCircle className="h-4 w-4" /> Saved!
+            </div>
+          )}
+        </div>
+        {saveError && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5">{saveError}</p>
         )}
       </div>
     </div>

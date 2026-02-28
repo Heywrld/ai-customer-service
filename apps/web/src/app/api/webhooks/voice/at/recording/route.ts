@@ -8,7 +8,6 @@ import {
   compressPrompt,
   logUsage,
 } from "@han/ai";
-import { storeAudio } from "@/lib/audioCache";
 import { getPlanStatus } from "@/lib/plan";
 
 // AT sends recording URL here after caller speaks
@@ -16,28 +15,25 @@ export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   const params = new URLSearchParams(rawBody);
 
+  // AT sends all fields in the POST body
   const recordingUrl = params.get("recordingUrl") ?? "";
   const durationInSeconds = params.get("durationInSeconds") ?? "0";
-
-  // Query params passed from the initial webhook
-  const url = new URL(req.url);
-  const businessId = url.searchParams.get("businessId") ?? "";
-  const callerNumber = url.searchParams.get("callerNumber") ?? "";
-  const destinationNumber = url.searchParams.get("destinationNumber") ?? "";
-  const sessionId = url.searchParams.get("sessionId") ?? "";
+  const callerNumber = params.get("callerNumber") ?? "";
+  const destinationNumber = params.get("destinationNumber") ?? "";
+  const sessionId = params.get("sessionId") ?? "";
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? req.nextUrl.origin;
 
-  console.log("[AT Recording] recordingUrl:", recordingUrl, "duration:", durationInSeconds);
+  console.log("[AT Recording] Callback hit:", { callerNumber, destinationNumber, sessionId, recordingUrl, durationInSeconds });
 
   // Nothing recorded or too short
   if (!recordingUrl || parseFloat(durationInSeconds) < 0.5) {
     return atXml(`<Say>Sorry, I didn't catch that. Please speak after calling back. Goodbye!</Say>`);
   }
 
-  // Look up business
+  // Look up business by the number the customer called
   const business = await db.business.findFirst({
-    where: { id: businessId, isActive: true },
+    where: { phoneNumber: destinationNumber, isActive: true },
   }).catch(() => null);
 
   if (!business) {
@@ -96,22 +92,16 @@ export async function POST(req: NextRequest) {
 
     const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
 
-    const { speechToText } = await import("@han/voice");
-    transcript = await speechToText(audioBuffer);
+    const { transcribeBuffer } = await import("@han/voice");
+    transcript = await transcribeBuffer(audioBuffer);
     console.log("[AT Recording] Transcript:", transcript);
   } catch (err) {
     console.error("[AT Recording] STT error:", err);
-    return atXml(
-      `<Say>Sorry, I had trouble hearing you. Please try again.</Say>` +
-      retryRecord(baseUrl, businessId, callerNumber, destinationNumber, sessionId)
-    );
+    return atXml(`<Say>Sorry, I had trouble hearing you. Please try again.</Say>${retryRecord(baseUrl)}`);
   }
 
   if (!transcript) {
-    return atXml(
-      `<Say>Sorry, I didn't catch that. Please try again.</Say>` +
-      retryRecord(baseUrl, businessId, callerNumber, destinationNumber, sessionId)
-    );
+    return atXml(`<Say>Sorry, I didn't catch that. Please try again.</Say>${retryRecord(baseUrl)}`);
   }
 
   // Save user message
@@ -129,7 +119,7 @@ export async function POST(req: NextRequest) {
         data: { conversationId: conversation.id, role: "assistant", content: cached, isCached: true },
       }).catch(() => null);
     }
-    return await buildVoiceResponse(cached, business, baseUrl, businessId, callerNumber, destinationNumber, sessionId);
+    return buildVoiceResponse(cached, baseUrl);
   }
 
   // Call Claude
@@ -182,41 +172,15 @@ export async function POST(req: NextRequest) {
     queryType: "voice",
   }).catch(() => null);
 
-  return await buildVoiceResponse(replyText, business, baseUrl, businessId, callerNumber, destinationNumber, sessionId);
+  return buildVoiceResponse(replyText, baseUrl);
 }
 
-// Build AT XML response: ElevenLabs TTS audio + prompt for next recording
-async function buildVoiceResponse(
-  replyText: string,
-  business: { voiceId: string | null },
-  baseUrl: string,
-  businessId: string,
-  callerNumber: string,
-  destinationNumber: string,
-  sessionId: string
-): Promise<NextResponse> {
-  const recordAction = retryRecord(baseUrl, businessId, callerNumber, destinationNumber, sessionId);
-
-  try {
-    const { textToSpeech } = await import("@han/voice");
-    const buf = await textToSpeech(replyText, business.voiceId ?? undefined);
-    const audioUrl = `${baseUrl}/api/voice/audio/${storeAudio(buf)}`;
-    return atXml(`<Play url="${audioUrl}"/>${recordAction}`);
-  } catch {
-    // Fallback to AT's built-in TTS
-    return atXml(`<Say>${escapeXml(replyText)}</Say>${recordAction}`);
-  }
+function buildVoiceResponse(replyText: string, baseUrl: string): NextResponse {
+  return atXml(`<Say voice="woman">${escapeXml(replyText)}</Say>${retryRecord(baseUrl)}`);
 }
 
-function retryRecord(
-  baseUrl: string,
-  businessId: string,
-  callerNumber: string,
-  destinationNumber: string,
-  sessionId: string
-): string {
-  const cb = `${baseUrl}/api/webhooks/voice/at/recording?businessId=${businessId}&amp;callerNumber=${encodeURIComponent(callerNumber)}&amp;destinationNumber=${encodeURIComponent(destinationNumber)}&amp;sessionId=${encodeURIComponent(sessionId)}`;
-  return `<Record finishOnKey="#" maxLength="30" trimSilence="true" playBeep="false" callbackUrl="${cb}"/>`;
+function retryRecord(baseUrl: string): string {
+  return `<Record maxLength="10" timeout="3" trimSilence="true" playBeep="false" callbackUrl="${baseUrl}/api/webhooks/voice/at/recording"/>`;
 }
 
 function atXml(content: string): NextResponse {

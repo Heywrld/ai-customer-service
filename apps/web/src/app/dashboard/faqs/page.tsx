@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Zap, Trash2, Edit2, ToggleLeft, ToggleRight, Loader2 } from "lucide-react";
+import { Plus, Zap, Trash2, Edit2, ToggleLeft, ToggleRight, Loader2, AlertCircle } from "lucide-react";
 
 interface FAQ {
   id: string;
@@ -26,17 +26,24 @@ function FAQModal({
   const [response, setResponse] = useState(faq?.response ?? "");
   const [language, setLanguage] = useState(faq?.language ?? "en");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const submit = async () => {
     if (!phrases.trim() || !response.trim()) return;
     setSaving(true);
-    await onSave({
-      triggerPhrases: phrases.split(",").map((p) => p.trim()).filter(Boolean),
-      response,
-      language,
-    });
-    setSaving(false);
-    onClose();
+    setError("");
+    try {
+      await onSave({
+        triggerPhrases: phrases.split(",").map((p) => p.trim()).filter(Boolean),
+        response,
+        language,
+      });
+      onClose();
+    } catch {
+      setError("Failed to save. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -85,6 +92,13 @@ function FAQModal({
           </div>
         </div>
 
+        {error && (
+          <div className="flex items-center gap-2 mt-4 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {error}
+          </div>
+        )}
+
         <div className="flex gap-3 mt-6">
           <button
             onClick={onClose}
@@ -112,11 +126,15 @@ function FAQCard({
   onEdit,
   onDelete,
   onToggle,
+  confirmingDelete,
+  onConfirmDelete,
 }: {
   faq: FAQ;
   onEdit: () => void;
   onDelete: () => void;
   onToggle: () => void;
+  confirmingDelete: boolean;
+  onConfirmDelete: () => void;
 }) {
   return (
     <div
@@ -160,12 +178,23 @@ function FAQCard({
         >
           <Edit2 className="h-4 w-4" />
         </button>
-        <button
-          onClick={onDelete}
-          className="text-slate-400 hover:text-red-500 transition-colors ml-auto"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+
+        {/* Two-step delete */}
+        {confirmingDelete ? (
+          <button
+            onClick={onDelete}
+            className="ml-auto text-xs font-medium text-red-600 bg-red-50 border border-red-200 px-2.5 py-1 rounded-lg hover:bg-red-100 transition-colors"
+          >
+            Confirm delete?
+          </button>
+        ) : (
+          <button
+            onClick={onConfirmDelete}
+            className="ml-auto text-slate-400 hover:text-red-500 transition-colors"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -175,49 +204,75 @@ function FAQCard({
 export default function FAQsPage() {
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [modal, setModal] = useState<null | "add" | FAQ>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const fetchFaqs = async () => {
-    const res = await fetch("/api/faqs");
-    const data = await res.json();
-    setFaqs(data.faqs ?? []);
-    setLoading(false);
+    try {
+      const res = await fetch("/api/faqs");
+      if (!res.ok) throw new Error("Failed to load");
+      const data = await res.json();
+      setFaqs(data.faqs ?? []);
+    } catch {
+      setError("Failed to load FAQs. Please refresh.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchFaqs(); }, []);
 
+  // Auto-cancel pending delete after 3s
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const t = setTimeout(() => setConfirmDelete(null), 3000);
+    return () => clearTimeout(t);
+  }, [confirmDelete]);
+
   const handleSave = async (data: Partial<FAQ>) => {
     if (modal && modal !== "add") {
-      // Edit
-      await fetch(`/api/faqs/${(modal as FAQ).id}`, {
+      const res = await fetch(`/api/faqs/${(modal as FAQ).id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
+      if (!res.ok) throw new Error("Failed to update");
     } else {
-      // Create
-      await fetch("/api/faqs", {
+      const res = await fetch("/api/faqs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
+      if (!res.ok) throw new Error("Failed to create");
     }
     await fetchFaqs();
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this FAQ?")) return;
-    await fetch(`/api/faqs/${id}`, { method: "DELETE" });
-    setFaqs((f) => f.filter((x) => x.id !== id));
+    try {
+      const res = await fetch(`/api/faqs/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      setFaqs((f) => f.filter((x) => x.id !== id));
+    } catch {
+      setError("Failed to delete FAQ. Please try again.");
+    } finally {
+      setConfirmDelete(null);
+    }
   };
 
   const handleToggle = async (faq: FAQ) => {
-    await fetch(`/api/faqs/${faq.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isActive: !faq.isActive }),
-    });
-    setFaqs((f) => f.map((x) => (x.id === faq.id ? { ...x, isActive: !x.isActive } : x)));
+    try {
+      const res = await fetch(`/api/faqs/${faq.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: !faq.isActive }),
+      });
+      if (!res.ok) throw new Error("Failed to toggle");
+      setFaqs((f) => f.map((x) => (x.id === faq.id ? { ...x, isActive: !x.isActive } : x)));
+    } catch {
+      setError("Failed to update FAQ. Please try again.");
+    }
   };
 
   return (
@@ -237,6 +292,14 @@ export default function FAQsPage() {
           Add FAQ
         </button>
       </div>
+
+      {error && (
+        <div className="flex items-center gap-2 mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          {error}
+          <button onClick={() => setError("")} className="ml-auto text-red-400 hover:text-red-600 text-xs">Dismiss</button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
@@ -265,6 +328,8 @@ export default function FAQsPage() {
               onEdit={() => setModal(faq)}
               onDelete={() => handleDelete(faq.id)}
               onToggle={() => handleToggle(faq)}
+              confirmingDelete={confirmDelete === faq.id}
+              onConfirmDelete={() => setConfirmDelete(faq.id)}
             />
           ))}
         </div>

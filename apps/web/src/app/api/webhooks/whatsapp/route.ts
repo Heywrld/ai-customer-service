@@ -11,14 +11,17 @@ function getTwilioClient() {
 }
 
 async function sendWhatsAppReply(to: string, from: string, body: string) {
+  console.log(`[WhatsApp] Sending reply → to=${to} from=${from} body="${body.slice(0, 50)}"`);
   try {
-    await getTwilioClient().messages.create({
+    const msg = await getTwilioClient().messages.create({
       from: `whatsapp:${from}`,
       to: `whatsapp:${to}`,
       body,
     });
-  } catch (err) {
-    console.error("[WhatsApp] Failed to send reply:", err);
+    console.log(`[WhatsApp] Reply sent ✓ sid=${msg.sid} status=${msg.status}`);
+  } catch (err: unknown) {
+    const e = err as { status?: number; message?: string; code?: number };
+    console.error(`[WhatsApp] SEND FAILED — status=${e?.status} code=${e?.code} message=${e?.message}`);
   }
 }
 import {

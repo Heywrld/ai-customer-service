@@ -7,15 +7,17 @@ import {
   LayoutDashboard,
   MessageSquare,
   Zap,
-  BarChart2,
+  Users,
+  CreditCard,
   Settings,
 } from "lucide-react";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/conversations", label: "Conversations", icon: MessageSquare },
+  { href: "/dashboard/customers", label: "Customers", icon: Users },
   { href: "/dashboard/faqs", label: "FAQs", icon: Zap },
-  { href: "/dashboard/analytics", label: "Analytics", icon: BarChart2 },
+  { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
@@ -28,7 +30,7 @@ export function Sidebar({ businessName, plan }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden lg:flex flex-col w-60 min-h-screen bg-slate-900 border-r border-slate-800 shrink-0">
+    <aside className="hidden lg:flex flex-col w-60 h-full bg-slate-900 border-r border-slate-800 shrink-0">
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-5 py-5 border-b border-slate-800">
         <img src="/icons/han-icon-white.svg" alt="Han" className="h-7 w-auto" />

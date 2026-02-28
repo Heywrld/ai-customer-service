@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, MessageSquare, Zap, Settings } from "lucide-react";
+import { LayoutDashboard, MessageSquare, Zap, Users, Settings } from "lucide-react";
 
 const NAV = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboard },
   { href: "/dashboard/conversations", label: "Chats", icon: MessageSquare },
+  { href: "/dashboard/customers", label: "Customers", icon: Users },
   { href: "/dashboard/faqs", label: "FAQs", icon: Zap },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];

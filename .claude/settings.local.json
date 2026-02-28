@@ -12,7 +12,14 @@
       "mcp__Neon__run_sql",
       "Bash(taskkill:*)",
       "Bash(curl:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(ngrok version:*)",
+      "Bash(which ngrok 2>&1 || where ngrok 2>&1)",
+      "Bash(cmd //c \"start /B \\\\\"\\\\\" \\\\\"C:\\\\\\\\Users\\\\\\\\heywrld\\\\\\\\AppData\\\\\\\\Roaming\\\\\\\\npm\\\\\\\\node_modules\\\\\\\\ngrok\\\\\\\\bin\\\\\\\\ngrok.exe\\\\\" http 3000 --authtoken=3A40q1g0YyYiQQvVJzlRGYYXvyL_49aFxpeqjny6Jc5ASL3fJ --log=stdout > C:\\\\\\\\Users\\\\\\\\heywrld\\\\\\\\ngrok-run.log 2>&1\" && sleep 8 && curl -s http://127.0.0.1:4040/api/tunnels 2>&1)",
+      "Bash(curl -s --ssl-no-revoke --max-time 5 http://127.0.0.1:4040/api/requests/http 2>&1 | python -c \"\nimport sys, json, base64\nd = json.load\\(sys.stdin\\)\nfor r in d.get\\('requests', []\\)[:8]:\n    uri = r.get\\('request', {}\\).get\\('uri', ''\\)\n    status = r.get\\('response', {}\\).get\\('status_code', ''\\)\n    duration = r.get\\('duration', ''\\)\n    print\\(f'{status} {uri} \\({duration}ms\\)'\\)\n\" 2>&1)",
+      "Bash(powershell.exe:*)",
+      "Bash(head:*)",
+      "mcp__Neon__run_sql_transaction"
     ]
   }
 }

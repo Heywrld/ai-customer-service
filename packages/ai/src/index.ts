@@ -1,6 +1,7 @@
 export { createAIClient } from "./client";
 export { routeModel } from "./router";
-export { getCached, setCached } from "./cache";
+export { getCached, setCached, cacheAudio, getCachedAudio, setVoiceSession, getVoiceSession, setVoiceResult, getVoiceResult, setPendingCallback, getPendingCallback, clearPendingCallback } from "./cache";
+export type { VoiceSession, VoiceResult } from "./cache";
 export { matchFAQ } from "./faq";
 export type { FAQTemplate } from "./faq";
 export { compressPrompt } from "./compressor";
