@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
 import { db } from "@han/database";
+import { isBusinessOpen, getBusinessHoursText } from "@/lib/businessHours";
 
 const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM";
 
@@ -42,6 +43,17 @@ export async function POST(req: NextRequest) {
 
   const businessName = business?.name ?? "this business";
   const voiceId = business?.voiceId ?? DEFAULT_VOICE_ID;
+
+  // Business hours check — play a closed message and hang up if outside hours
+  if (business && !isBusinessOpen(business.businessHours)) {
+    const hoursText = getBusinessHoursText(business.businessHours);
+    const closedText = `Thank you for calling ${businessName}. We are currently closed. Our business hours are ${hoursText}. Please call back during our business hours. Thank you.`;
+    const closedUrl = buildTtsUrl(baseUrl, closedText, voiceId);
+    return new NextResponse(
+      `<?xml version="1.0" encoding="UTF-8"?>\n<Response>\n  <Play url="${closedUrl}"/>\n</Response>`,
+      { headers: { "Content-Type": "text/xml" } }
+    );
+  }
 
   const greetingText = `Hello! Thank you for calling ${businessName}. How can I help you today?`;
   const greetingUrl = buildTtsUrl(baseUrl, greetingText, voiceId);

@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { db } from "@han/database";
 import Link from "next/link";
 import { ArrowLeft, Bot, User } from "lucide-react";
+import { ConversationActions } from "@/components/dashboard/ConversationActions";
 
 const maskPhone = (p: string) => p.replace(/(\d{4})\d{3}(\d{4})/, "$1***$2");
 
@@ -68,12 +69,28 @@ export default async function ConversationThreadPage({
             </h1>
             {conversation.customer.usesPidgin && <span>🇳🇬</span>}
           </div>
-          <p className="text-slate-400 text-xs">{phone} · WhatsApp · {conversation.status}</p>
+          <p className="text-slate-400 text-xs">
+            {phone} · {conversation.channel} ·{" "}
+            <span
+              className={
+                conversation.status === "resolved"
+                  ? "text-emerald-500"
+                  : conversation.status === "escalated"
+                  ? "text-amber-500"
+                  : "text-sky-500"
+              }
+            >
+              {conversation.status}
+            </span>
+          </p>
         </div>
       </div>
 
+      {/* Status actions */}
+      <ConversationActions id={conversation.id} status={conversation.status} />
+
       {/* Messages */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+      <div className="mt-5 bg-white border border-slate-200 rounded-xl overflow-hidden">
         <div className="flex flex-col gap-4 p-5 max-h-[60vh] overflow-y-auto">
           {conversation.messages.map((msg) => {
             const isUser = msg.role === "user";

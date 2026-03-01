@@ -36,6 +36,7 @@ import {
 } from "@han/ai";
 import type { FAQTemplate } from "@han/ai";
 import { getPlanStatus } from "@/lib/plan";
+import { isBusinessOpen, getBusinessHoursText } from "@/lib/businessHours";
 
 // ─── Twilio signature validation ─────────────────────────────────────────────
 function validateTwilioSignature(req: NextRequest, body: string): boolean {
@@ -129,6 +130,17 @@ async function processAndReply(fromNumber: string, toNumber: string, incomingMes
         ? `Your 14-day free trial has ended. Visit ${process.env.NEXT_PUBLIC_APP_URL ?? "your dashboard"} to upgrade and keep Han answering your customers. 🙏`
         : `You've used all ${planStatus.callsLimit} messages on your plan this month. Upgrade at ${process.env.NEXT_PUBLIC_APP_URL ?? "your dashboard"} to continue. 🚀`;
       await sendWhatsAppReply(fromNumber, toNumber, msg);
+      return;
+    }
+
+    // 3.5. Business hours check
+    if (!isBusinessOpen(business.businessHours)) {
+      const hoursText = getBusinessHoursText(business.businessHours);
+      await sendWhatsAppReply(
+        fromNumber,
+        toNumber,
+        `Hi! We're currently closed. Our hours are ${hoursText}. We'll get back to you when we open. 🙏`
+      );
       return;
     }
 
