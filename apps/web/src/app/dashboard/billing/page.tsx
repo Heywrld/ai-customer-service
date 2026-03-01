@@ -8,6 +8,7 @@ interface BusinessData {
   plan: string;
   monthlyCallCount: number;
   trialEndsAt: string;
+  subscriptionStatus: string;
 }
 
 const PLANS = [
@@ -141,11 +142,28 @@ export default function BillingPage() {
               <p className="text-xs text-slate-500 font-medium mb-0.5">Current plan</p>
               <p className="text-lg font-bold text-slate-900 capitalize">{currentPlan}</p>
             </div>
-            {currentPlan === "trial" && (
-              <span className="text-sm text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full font-medium">
-                {trialDaysLeft} days left
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {business.subscriptionStatus === "active" && currentPlan !== "trial" && (
+                <span className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full font-medium">
+                  Subscription active
+                </span>
+              )}
+              {business.subscriptionStatus === "payment_failed" && (
+                <span className="text-xs text-red-700 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full font-medium">
+                  Payment failed
+                </span>
+              )}
+              {business.subscriptionStatus === "cancelled" && (
+                <span className="text-xs text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full font-medium">
+                  Cancelled
+                </span>
+              )}
+              {currentPlan === "trial" && (
+                <span className="text-sm text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full font-medium">
+                  {trialDaysLeft} days left
+                </span>
+              )}
+            </div>
           </div>
           <div>
             <div className="flex justify-between text-xs mb-1.5">

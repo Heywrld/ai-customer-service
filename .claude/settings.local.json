@@ -19,7 +19,9 @@
       "Bash(curl -s --ssl-no-revoke --max-time 5 http://127.0.0.1:4040/api/requests/http 2>&1 | python -c \"\nimport sys, json, base64\nd = json.load\\(sys.stdin\\)\nfor r in d.get\\('requests', []\\)[:8]:\n    uri = r.get\\('request', {}\\).get\\('uri', ''\\)\n    status = r.get\\('response', {}\\).get\\('status_code', ''\\)\n    duration = r.get\\('duration', ''\\)\n    print\\(f'{status} {uri} \\({duration}ms\\)'\\)\n\" 2>&1)",
       "Bash(powershell.exe:*)",
       "Bash(head:*)",
-      "mcp__Neon__run_sql_transaction"
+      "mcp__Neon__run_sql_transaction",
+      "Bash(cmd:*)",
+      "Bash(pnpm prisma:*)"
     ]
   }
 }

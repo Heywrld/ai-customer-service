@@ -23,6 +23,8 @@ model Business {
   phoneNumberSid        String?  @map("phone_number_sid")   // Twilio SID — for management/release
   whatsappProvider      String   @default("byon") @map("whatsapp_provider")     // "byon" only for now
   isActive              Boolean  @default(true) @map("is_active")
+  subscriptionCode      String?  @map("subscription_code")    // Paystack subscription code (e.g. SUB_xxx)
+  subscriptionStatus    String   @default("none") @map("subscription_status") // "none" | "active" | "payment_failed" | "cancelled"
   plan           String   @default("trial") @map("plan")
   trialEndsAt    DateTime @default(dbgenerated("now() + interval '14 days'")) @map("trial_ends_at")
   monthlyCallCount  Int   @default(0) @map("monthly_call_count")

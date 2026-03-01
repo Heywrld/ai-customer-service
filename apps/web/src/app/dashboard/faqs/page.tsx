@@ -204,9 +204,23 @@ function FAQCard({
 export default function FAQsPage() {
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
   const [modal, setModal] = useState<null | "add" | FAQ>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  const generateFaqs = async () => {
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/faqs/generate", { method: "POST" });
+      const data = await res.json();
+      if (data.faqs) setFaqs((prev) => [...data.faqs, ...prev]);
+    } catch {
+      setError("Failed to generate FAQs. Please try again.");
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const fetchFaqs = async () => {
     try {
@@ -284,13 +298,24 @@ export default function FAQsPage() {
             Every FAQ match = ₦0.00 AI cost
           </p>
         </div>
-        <button
-          onClick={() => setModal("add")}
-          className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Add FAQ
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={generateFaqs}
+            disabled={generating}
+            className="flex items-center gap-1.5 text-sm border border-sky-200 text-sky-600 hover:bg-sky-50 disabled:opacity-50 px-3 py-2.5 rounded-lg transition-colors"
+          >
+            {generating
+              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</>
+              : <>✦ Suggest FAQs</>}
+          </button>
+          <button
+            onClick={() => setModal("add")}
+            className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Add FAQ
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -309,15 +334,26 @@ export default function FAQsPage() {
         <div className="bg-white border border-slate-200 rounded-xl p-12 text-center">
           <Zap className="h-10 w-10 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-500 font-medium">No FAQs yet</p>
-          <p className="text-slate-400 text-sm mt-1">
-            Add your first FAQ — every match saves you money.
+          <p className="text-slate-400 text-sm mt-1 mb-5">
+            Every FAQ match = ₦0.00 AI cost. Let Han generate a starter set.
           </p>
-          <button
-            onClick={() => setModal("add")}
-            className="mt-4 bg-sky-500 hover:bg-sky-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
-          >
-            Add your first FAQ
-          </button>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={generateFaqs}
+              disabled={generating}
+              className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              {generating
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating…</>
+                : <>✦ Generate starter FAQs</>}
+            </button>
+            <button
+              onClick={() => setModal("add")}
+              className="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+            >
+              Add manually
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

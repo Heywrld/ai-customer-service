@@ -78,6 +78,10 @@ export default function OnboardingPage() {
   const [numbersLoading, setNumbersLoading] = useState(false);
   const [numbersPurchasing, setNumbersPurchasing] = useState(false);
 
+  // AI description suggestion
+  const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [suggestionLoading, setSuggestionLoading] = useState(false);
+
   // Test chat
   const [testInput, setTestInput] = useState("");
   const [testHistory, setTestHistory] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
@@ -126,6 +130,19 @@ Guidelines:
     if (step === 0) {
       if (!form.name.trim()) return setError("Business name is required");
       if (!form.industry) return setError("Please select your industry");
+
+      // Fire suggestion in background — don't block step transition
+      setSuggestion(null);
+      setSuggestionLoading(true);
+      fetch("/api/onboarding/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: form.name, industry: form.industry, city: form.city }),
+      })
+        .then((r) => r.json())
+        .then((d) => { if (d.description) setSuggestion(d.description); })
+        .catch(() => null)
+        .finally(() => setSuggestionLoading(false));
     }
 
     if (step === 1) {
@@ -174,6 +191,9 @@ Guidelines:
           }),
         });
         if (!res.ok) throw new Error("Failed to save");
+
+        // Fire-and-forget — pre-populate FAQs while user does Step 3
+        fetch("/api/faqs/generate", { method: "POST" }).catch(() => null);
       } catch {
         setLoading(false);
         setNumbersPurchasing(false);
@@ -281,6 +301,39 @@ Guidelines:
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
               What do you sell or offer? <span className="text-red-400">*</span>
             </label>
+
+            {/* Suggestion loading */}
+            {suggestionLoading && (
+              <div className="flex items-center gap-2 text-xs text-sky-600 mb-3">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Generating a description for you…
+              </div>
+            )}
+
+            {/* Suggestion banner */}
+            {suggestion && !suggestionLoading && (
+              <div className="border border-sky-200 bg-sky-50 rounded-xl p-4 mb-3">
+                <p className="text-xs font-semibold text-sky-700 mb-1.5">
+                  ✦ We drafted this for you — does it fit?
+                </p>
+                <p className="text-sm text-slate-700 mb-3 leading-relaxed">{suggestion}</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { set("description", suggestion); setSuggestion(null); }}
+                    className="text-xs font-medium bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    Use this
+                  </button>
+                  <button
+                    onClick={() => setSuggestion(null)}
+                    className="text-xs font-medium text-slate-500 hover:bg-slate-100 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    Skip
+                  </button>
+                </div>
+              </div>
+            )}
+
             <textarea value={form.description} onChange={(e) => set("description", e.target.value)}
               rows={6}
               placeholder={`e.g. We sell women's clothing — ankara dresses, corporate outfits, and accessories. Prices range from ₦5,000 to ₦80,000. We deliver to all Lagos zones within 24 hours. Payment via bank transfer or cash on delivery.`}
