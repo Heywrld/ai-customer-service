@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  CheckCircle, ChevronRight, Loader2, MessageSquare, RefreshCw,
+  CheckCircle, ChevronRight, Loader2, MessageSquare,
 } from "lucide-react";
 
 interface FormData {
@@ -12,16 +12,8 @@ interface FormData {
   city: string;
   description: string;
   systemPrompt: string;
-  // Voice
-  selectedNumber: string;   // chosen from Han's pool
-  byonNumber: string;       // business's own number
+  byonNumber: string;
   useByon: boolean;
-}
-
-interface AvailableNumber {
-  phoneNumber: string;
-  friendlyName: string;
-  locality: string | null;
 }
 
 const INDUSTRIES = [
@@ -71,12 +63,8 @@ export default function OnboardingPage() {
   const [form, setForm] = useState<FormData>({
     name: "", industry: "", city: "Lagos",
     description: "", systemPrompt: "",
-    selectedNumber: "", byonNumber: "", useByon: false,
+    byonNumber: "", useByon: false,
   });
-
-  const [availableNumbers, setAvailableNumbers] = useState<AvailableNumber[]>([]);
-  const [numbersLoading, setNumbersLoading] = useState(false);
-  const [numbersPurchasing, setNumbersPurchasing] = useState(false);
 
   // AI description suggestion
   const [suggestion, setSuggestion] = useState<string | null>(null);
@@ -89,27 +77,6 @@ export default function OnboardingPage() {
 
   const set = <K extends keyof FormData>(key: K, val: FormData[K]) =>
     setForm((f) => ({ ...f, [key]: val }));
-
-  // Load numbers when reaching step 2
-  useEffect(() => {
-    if (step === 2) loadNumbers();
-  }, [step]);
-
-  const loadNumbers = async () => {
-    setNumbersLoading(true);
-    try {
-      const res = await fetch("/api/numbers/available");
-      const data = await res.json();
-      const nums: AvailableNumber[] = data.numbers ?? [];
-      setAvailableNumbers(nums);
-      if (nums.length > 0 && !form.selectedNumber) {
-        set("selectedNumber", nums[0].phoneNumber);
-      }
-    } catch {
-      setAvailableNumbers([]);
-    }
-    setNumbersLoading(false);
-  };
 
   const generateSystemPrompt = () =>
     set("systemPrompt", `You are a helpful customer service AI for ${form.name}, a ${form.industry} business based in ${form.city}, Nigeria.
@@ -153,30 +120,8 @@ Guidelines:
     if (step === 2) {
       setLoading(true);
       try {
-        let finalPhoneNumber: string | null = null;
-        let phoneNumberProvider = "byon";
-
-        if (form.useByon) {
-          // BYON — just save the number they typed
-          finalPhoneNumber = form.byonNumber.trim() || null;
-        } else if (form.selectedNumber) {
-          // Purchase from Han
-          setNumbersPurchasing(true);
-          const res = await fetch("/api/numbers/purchase", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ phoneNumber: form.selectedNumber }),
-          });
-          setNumbersPurchasing(false);
-          if (!res.ok) {
-            const err = await res.json();
-            setLoading(false);
-            return setError(err.error ?? "Failed to get your number. Please try again.");
-          }
-          const data = await res.json();
-          finalPhoneNumber = data.phoneNumber;
-          phoneNumberProvider = "han_twilio";
-        }
+        const phoneNumber = form.useByon ? (form.byonNumber.trim() || null) : null;
+        const phoneNumberProvider = form.useByon && phoneNumber ? "byon" : undefined;
 
         const res = await fetch("/api/business", {
           method: "POST",
@@ -186,7 +131,7 @@ Guidelines:
             industry: form.industry,
             city: form.city,
             systemPrompt: form.systemPrompt || undefined,
-            phoneNumber: finalPhoneNumber || undefined,
+            phoneNumber: phoneNumber || undefined,
             phoneNumberProvider,
           }),
         });
@@ -196,7 +141,6 @@ Guidelines:
         fetch("/api/faqs/generate", { method: "POST" }).catch(() => null);
       } catch {
         setLoading(false);
-        setNumbersPurchasing(false);
         return setError("Something went wrong. Please try again.");
       }
       setLoading(false);
@@ -238,12 +182,6 @@ Guidelines:
       </div>
     );
   }
-
-  const continueLabel = () => {
-    if (!loading) return "Continue";
-    if (numbersPurchasing) return "Getting your number…";
-    return "Saving…";
-  };
 
   return (
     <div className="max-w-lg mx-auto">
@@ -350,60 +288,39 @@ Guidelines:
         <div className="space-y-5">
           {!form.useByon ? (
             <>
-              <div className="text-center">
-                <div className="text-5xl mb-3">📞</div>
-                <h2 className="text-lg font-bold text-slate-900">Get your Nigerian number</h2>
-                <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">
-                  Han will answer every call to this number, 24/7 —
-                  in your chosen voice, trained on your business.
-                  Included in all plans.
+              {/* Pool assignment card */}
+              <div className="bg-gradient-to-br from-sky-50 to-cyan-50 border border-sky-200 rounded-2xl p-6 text-center">
+                <div className="text-5xl mb-4">📞</div>
+                <h2 className="text-lg font-bold text-slate-900 mb-2">
+                  Your Han number is ready to go
+                </h2>
+                <p className="text-sm text-slate-600 leading-relaxed mb-4">
+                  Han will assign you a dedicated Nigerian number the moment your plan activates.
+                  No setup required — it handles both voice calls and WhatsApp messages automatically.
+                </p>
+                <div className="flex items-center justify-center gap-3">
+                  <span className="inline-flex items-center gap-1.5 bg-white border border-slate-200 rounded-full px-3 py-1 text-xs font-medium text-slate-700">
+                    📞 Voice calls
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 bg-white border border-slate-200 rounded-full px-3 py-1 text-xs font-medium text-slate-700">
+                    💬 WhatsApp
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 flex items-start gap-3">
+                <span className="text-slate-400 mt-0.5">ℹ️</span>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Your number will appear in <strong>Settings</strong> once your subscription is active.
+                  Customers can call or WhatsApp it from day one.
                 </p>
               </div>
 
-              {/* Number list */}
-              {numbersLoading ? (
-                <div className="flex items-center justify-center gap-2 py-8 text-slate-400 text-sm">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Finding available numbers…
-                </div>
-              ) : availableNumbers.length > 0 ? (
-                <div className="space-y-2">
-                  {availableNumbers.map((n) => (
-                    <label key={n.phoneNumber} className={`flex items-center gap-3 px-4 py-3.5 rounded-xl border cursor-pointer transition-all ${
-                      form.selectedNumber === n.phoneNumber
-                        ? "border-sky-400 bg-sky-50 shadow-sm"
-                        : "border-slate-200 bg-white hover:border-slate-300"
-                    }`}>
-                      <input type="radio" name="number" value={n.phoneNumber}
-                        checked={form.selectedNumber === n.phoneNumber}
-                        onChange={() => set("selectedNumber", n.phoneNumber)}
-                        className="accent-sky-500 shrink-0" />
-                      <span className="font-mono font-semibold text-slate-800 text-sm flex-1">
-                        {n.friendlyName}
-                      </span>
-                      {n.locality && (
-                        <span className="text-xs text-slate-400">{n.locality}</span>
-                      )}
-                    </label>
-                  ))}
-
-                  <button onClick={loadNumbers} disabled={numbersLoading}
-                    className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors mt-1 mx-auto">
-                    <RefreshCw className="h-3 w-3" /> Show different numbers
-                  </button>
-                </div>
-              ) : (
-                <div className="text-center py-6 text-sm text-slate-500">
-                  No numbers available right now.{" "}
-                  <button onClick={loadNumbers} className="text-sky-500 underline">Try again</button>
-                </div>
-              )}
-
               {/* BYON escape hatch */}
-              <p className="text-center pt-1">
+              <p className="text-center">
                 <button onClick={() => set("useByon", true)}
                   className="text-xs text-slate-400 hover:text-slate-600 underline transition-colors">
-                  Already have a voice number? Use it instead
+                  Already have a number? Use it instead
                 </button>
               </p>
             </>
@@ -417,7 +334,7 @@ Guidelines:
                 </button>
 
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Your existing voice number
+                  Your existing number
                 </label>
                 <input type="tel" value={form.byonNumber}
                   onChange={(e) => set("byonNumber", e.target.value)}
@@ -441,7 +358,7 @@ Guidelines:
               <p className="text-center">
                 <button onClick={() => { set("byonNumber", ""); set("useByon", false); next(); }}
                   className="text-xs text-slate-400 hover:text-slate-600 underline">
-                  Skip — I&apos;ll set up voice calls later
+                  Skip — I&apos;ll set this up later
                 </button>
               </p>
             </>
@@ -524,7 +441,7 @@ Guidelines:
           <button onClick={next} disabled={loading}
             className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-60 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors">
             {loading
-              ? <><Loader2 className="h-4 w-4 animate-spin" />{continueLabel()}</>
+              ? <><Loader2 className="h-4 w-4 animate-spin" />Saving…</>
               : <>Continue <ChevronRight className="h-4 w-4" /></>}
           </button>
         ) : (

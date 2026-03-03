@@ -3,6 +3,38 @@ import crypto from "crypto";
 import { db } from "@han/database";
 import { releaseNumber } from "@han/voice";
 
+async function assignPoolNumber(businessId: string) {
+  try {
+    const poolNumber = await db.phoneNumberPool.findFirst({
+      where: { assignedBusinessId: null, whatsappReady: true },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!poolNumber) {
+      console.warn(`[Paystack] No pool numbers available for business ${businessId}`);
+      return;
+    }
+    await db.$transaction([
+      db.phoneNumberPool.update({
+        where: { id: poolNumber.id },
+        data: { assignedBusinessId: businessId, assignedAt: new Date() },
+      }),
+      db.business.update({
+        where: { id: businessId },
+        data: {
+          phoneNumber: poolNumber.phoneNumber,
+          phoneNumberSid: poolNumber.twilioSid,
+          phoneNumberProvider: "han_pool",
+          whatsappNumber: poolNumber.phoneNumber,
+          whatsappProvider: "han_pool",
+        },
+      }),
+    ]);
+    console.log(`[Paystack] Pool number ${poolNumber.phoneNumber} assigned to business ${businessId}`);
+  } catch (err) {
+    console.error("[Paystack] Failed to assign pool number:", err);
+  }
+}
+
 function verifySignature(body: string, signature: string): boolean {
   const secret = process.env.PAYSTACK_SECRET_KEY ?? "";
   const hash = crypto.createHmac("sha512", secret).update(body).digest("hex");
@@ -33,7 +65,7 @@ export async function POST(req: NextRequest) {
     const nextYear = new Date();
     nextYear.setFullYear(nextYear.getFullYear() + 1);
 
-    await db.business.update({
+    const updatedBusiness = await db.business.update({
       where: { id: businessId },
       data: {
         plan,
@@ -43,6 +75,12 @@ export async function POST(req: NextRequest) {
         subscriptionStatus: "active",
       },
     }).catch(console.error);
+
+    // Assign a pool number if the business doesn't already have one
+    const biz = updatedBusiness ?? await db.business.findUnique({ where: { id: businessId } }).catch(() => null);
+    if (biz && biz.phoneNumberProvider !== "han_pool" && !biz.phoneNumber) {
+      await assignPoolNumber(businessId);
+    }
 
     console.log(`[Paystack] charge.success → upgraded business ${businessId} to ${plan}`);
   }
@@ -99,13 +137,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // Release Twilio number if Han-managed
-    if (business.phoneNumberProvider === "han_twilio" && business.phoneNumberSid) {
+    if (business.phoneNumberProvider === "han_pool") {
+      // Reclaim pool number — do NOT release to Twilio, just mark as available again
+      await db.phoneNumberPool.updateMany({
+        where: { assignedBusinessId: business.id },
+        data: { assignedBusinessId: null, assignedAt: null },
+      }).catch((err) => console.error("[Paystack] Failed to reclaim pool number:", err));
+      console.log(`[Paystack] Reclaimed pool number ${business.phoneNumber} from business ${business.id}`);
+    } else if (business.phoneNumberProvider === "han_twilio" && business.phoneNumberSid) {
+      // Legacy: release individually-purchased Twilio numbers
       await releaseNumber(business.phoneNumberSid).catch((err) =>
         console.error("[Paystack] Failed to release Twilio number:", err)
       );
       console.log(`[Paystack] Released Twilio number ${business.phoneNumber} for business ${business.id}`);
     }
+
+    const isHanManaged = business.phoneNumberProvider === "han_pool" || business.phoneNumberProvider === "han_twilio";
 
     await db.business.update({
       where: { id: business.id },
@@ -114,9 +161,11 @@ export async function POST(req: NextRequest) {
         subscriptionStatus: "cancelled",
         subscriptionCode: null,
         isActive: false,
-        phoneNumber: business.phoneNumberProvider === "han_twilio" ? null : business.phoneNumber,
-        phoneNumberSid: business.phoneNumberProvider === "han_twilio" ? null : business.phoneNumberSid,
-        phoneNumberProvider: business.phoneNumberProvider === "han_twilio" ? "byon" : business.phoneNumberProvider,
+        phoneNumber: isHanManaged ? null : business.phoneNumber,
+        phoneNumberSid: isHanManaged ? null : business.phoneNumberSid,
+        phoneNumberProvider: isHanManaged ? "byon" : business.phoneNumberProvider,
+        whatsappNumber: isHanManaged ? null : business.whatsappNumber,
+        whatsappProvider: isHanManaged ? "byon" : business.whatsappProvider,
       },
     }).catch(console.error);
 

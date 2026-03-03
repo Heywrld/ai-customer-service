@@ -21,7 +21,8 @@
       "Bash(head:*)",
       "mcp__Neon__run_sql_transaction",
       "Bash(cmd:*)",
-      "Bash(pnpm prisma:*)"
+      "Bash(pnpm prisma:*)",
+      "mcp__ide__getDiagnostics"
     ]
   }
 }

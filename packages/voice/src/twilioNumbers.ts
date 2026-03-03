@@ -81,3 +81,59 @@ export async function updateNumberWebhook(
     voiceMethod: "POST",
   });
 }
+
+/**
+ * Register a Twilio number as a WhatsApp Business sender under Han's WABA.
+ * Returns the WhatsApp sender SID to store in the pool record.
+ *
+ * Twilio will trigger Meta to verify the number. Since Han owns the number
+ * (it's in Han's pool), verification can be handled internally (e.g. via
+ * an inbound SMS or voice OTP that Han receives and confirms).
+ */
+export async function registerWhatsappSender(
+  phoneNumber: string,
+  webhookBaseUrl: string
+): Promise<{ sid: string }> {
+  const client = createTwilioClient();
+
+  // Create a messaging service sender for this number
+  // Twilio will initiate the WhatsApp Business API registration with Meta
+  const sender = await (client as any).messaging.v1.services.create({
+    friendlyName: `Han Pool - ${phoneNumber}`,
+    inboundRequestUrl: `${webhookBaseUrl}/api/webhooks/whatsapp`,
+    inboundMethod: "POST",
+    statusCallback: `${webhookBaseUrl}/api/webhooks/whatsapp/status`,
+  });
+
+  return { sid: sender.sid };
+}
+
+/**
+ * Remove a WhatsApp sender registration (e.g. when retiring a pool number permanently).
+ */
+export async function deregisterWhatsappSender(whatsappSid: string): Promise<void> {
+  const client = createTwilioClient();
+  await (client as any).messaging.v1.services(whatsappSid).remove();
+}
+
+/**
+ * Initiate an outbound call from a Han pool number to a customer.
+ * Returns the Twilio Call SID.
+ */
+export async function makeCall(
+  to: string,
+  from: string,
+  twimlUrl: string,
+  statusCallbackUrl: string
+): Promise<string> {
+  const client = createTwilioClient();
+  const call = await client.calls.create({
+    to,
+    from,
+    url: twimlUrl,
+    method: "POST",
+    statusCallback: statusCallbackUrl,
+    statusCallbackMethod: "POST",
+  });
+  return call.sid;
+}

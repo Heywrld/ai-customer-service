@@ -8,5 +8,6 @@ export {
   purchaseNumber,
   releaseNumber,
   updateNumberWebhook,
+  makeCall,
 } from "./twilioNumbers";
 export type { AvailableNumber, PurchasedNumber } from "./twilioNumbers";

@@ -13,7 +13,9 @@ interface BusinessProfile {
   whatsappNumber: string;
   phoneNumber: string;
   phoneNumberProvider: string;
+  whatsappProvider: string;
   plan: string;
+  missedCallCallback: boolean;
 }
 
 interface VoiceOption {
@@ -150,7 +152,8 @@ export default function SettingsPage() {
   const [form, setForm] = useState<BusinessProfile>({
     name: "", industry: "", city: "Lagos",
     systemPrompt: "", whatsappNumber: "", phoneNumber: "",
-    phoneNumberProvider: "byon", plan: "trial",
+    phoneNumberProvider: "byon", whatsappProvider: "byon", plan: "trial",
+    missedCallCallback: false,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -182,7 +185,9 @@ export default function SettingsPage() {
             whatsappNumber: d.business.whatsappNumber ?? "",
             phoneNumber: d.business.phoneNumber ?? "",
             phoneNumberProvider: d.business.phoneNumberProvider ?? "byon",
+            whatsappProvider: d.business.whatsappProvider ?? "byon",
             plan: d.business.plan ?? "trial",
+            missedCallCallback: d.business.missedCallCallback ?? false,
           });
         }
         setLoading(false);
@@ -289,56 +294,67 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* WhatsApp */}
-        <section className="bg-white border border-slate-200 rounded-xl p-6">
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-2">
-              <FaWhatsapp className="text-[#25D366] text-lg" />
-              <h2 className="text-base font-semibold text-slate-800">WhatsApp</h2>
+        {/* Han Pool Number — unified Voice + WhatsApp card */}
+        {form.phoneNumberProvider === "han_pool" ? (
+          <section className="bg-white border border-slate-200 rounded-xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-slate-800">Your Han Number</h2>
+              <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full font-medium">Active</span>
             </div>
-            <ChannelStatus active={!!form.whatsappNumber} label="Active" />
-          </div>
-          <p className="text-xs text-slate-400 mb-4">Your Twilio WhatsApp number that customers message</p>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Twilio WhatsApp number</label>
-            <input type="tel" value={form.whatsappNumber} onChange={(e) => set("whatsappNumber", e.target.value)}
-              placeholder="+14155238886"
-              className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-400" />
-          </div>
-          <div className="mt-4 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
-            <p className="text-xs text-slate-500 mb-1">Webhook URL — paste this in your Twilio console:</p>
-            <div className="flex items-center">
-              <code className="text-xs font-mono text-slate-700 break-all flex-1">{whatsappWebhook}</code>
-              <CopyButton text={whatsappWebhook} />
+            <div className="bg-gradient-to-r from-sky-50 to-cyan-50 border border-sky-200 rounded-xl px-5 py-4 mb-4">
+              <p className="text-xs text-slate-500 mb-1">Your Han-managed number</p>
+              <p className="text-2xl font-mono font-bold text-slate-800 tracking-wide">{form.phoneNumber}</p>
+              <p className="text-xs text-slate-500 mt-2">Share this number with your customers — they can call it or WhatsApp it.</p>
             </div>
-          </div>
-        </section>
+            <div className="flex items-center gap-3">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <Phone className="h-3 w-3" /> Voice ready
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <FaWhatsapp className="h-3 w-3 text-[#25D366]" /> WhatsApp ready
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-3">
+              Both channels are automatically configured and monitored by Han. No setup required.
+            </p>
+          </section>
+        ) : (
+          <>
+            {/* WhatsApp — BYON */}
+            <section className="bg-white border border-slate-200 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <FaWhatsapp className="text-[#25D366] text-lg" />
+                  <h2 className="text-base font-semibold text-slate-800">WhatsApp</h2>
+                </div>
+                <ChannelStatus active={!!form.whatsappNumber} label="Active" />
+              </div>
+              <p className="text-xs text-slate-400 mb-4">Your Twilio WhatsApp number that customers message</p>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Twilio WhatsApp number</label>
+                <input type="tel" value={form.whatsappNumber} onChange={(e) => set("whatsappNumber", e.target.value)}
+                  placeholder="+14155238886"
+                  className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-400" />
+              </div>
+              <div className="mt-4 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
+                <p className="text-xs text-slate-500 mb-1">Webhook URL — paste this in your Twilio console:</p>
+                <div className="flex items-center">
+                  <code className="text-xs font-mono text-slate-700 break-all flex-1">{whatsappWebhook}</code>
+                  <CopyButton text={whatsappWebhook} />
+                </div>
+              </div>
+            </section>
 
-        {/* Voice calls */}
-        <section className="bg-white border border-slate-200 rounded-xl p-6">
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-2">
-              <Phone className="text-sky-500 h-4 w-4" />
-              <h2 className="text-base font-semibold text-slate-800">Voice Calls</h2>
-            </div>
-            <ChannelStatus active={!!form.phoneNumber} label={
-              form.phoneNumberProvider === "han_twilio" ? "Han-managed" : "Active"
-            } />
-          </div>
-          <p className="text-xs text-slate-400 mb-4">
-            {form.phoneNumberProvider === "han_twilio"
-              ? "Your number is managed by Han. Webhook is auto-configured."
-              : "Your voice number that customers call"}
-          </p>
-
-          {form.phoneNumberProvider === "han_twilio" ? (
-            <div className="bg-sky-50 border border-sky-200 rounded-lg px-4 py-3">
-              <p className="text-xs text-slate-600 mb-0.5">Your Han-managed number</p>
-              <p className="text-base font-mono font-semibold text-slate-800">{form.phoneNumber}</p>
-              <p className="text-xs text-slate-500 mt-1">Webhook is automatically configured. No action needed.</p>
-            </div>
-          ) : (
-            <>
+            {/* Voice calls — BYON */}
+            <section className="bg-white border border-slate-200 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <Phone className="text-sky-500 h-4 w-4" />
+                  <h2 className="text-base font-semibold text-slate-800">Voice Calls</h2>
+                </div>
+                <ChannelStatus active={!!form.phoneNumber} label="Active" />
+              </div>
+              <p className="text-xs text-slate-400 mb-4">Your voice number that customers call</p>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Voice number</label>
                 <input type="tel" value={form.phoneNumber} onChange={(e) => set("phoneNumber", e.target.value)}
@@ -352,9 +368,9 @@ export default function SettingsPage() {
                   <CopyButton text={voiceWebhook} />
                 </div>
               </div>
-            </>
-          )}
-        </section>
+            </section>
+          </>
+        )}
 
         {/* Voice picker */}
         <section className="bg-white border border-slate-200 rounded-xl p-6">
@@ -422,6 +438,32 @@ export default function SettingsPage() {
               )}
             </>
           )}
+        </section>
+
+        {/* Outbound calling */}
+        <section className="bg-white border border-slate-200 rounded-xl p-6">
+          <h2 className="text-base font-semibold text-slate-800 mb-4">Outbound Calls</h2>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-slate-800">Missed call callback</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Han automatically calls customers back when they hang up before being answered
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={form.missedCallCallback}
+              onClick={() => setForm((f) => ({ ...f, missedCallCallback: !f.missedCallCallback }))}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none ${
+                form.missedCallCallback ? "bg-sky-500" : "bg-slate-200"
+              }`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                form.missedCallCallback ? "translate-x-6" : "translate-x-1"
+              }`} />
+            </button>
+          </div>
         </section>
 
         {/* AI System Prompt */}

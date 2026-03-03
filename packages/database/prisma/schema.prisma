@@ -19,25 +19,44 @@ model Business {
   systemPrompt   String?  @map("system_prompt")
   businessHours  Json?    @default("{\"mon_fri\": {\"open\": \"09:00\", \"close\": \"19:00\"}, \"sat\": {\"open\": \"10:00\", \"close\": \"20:00\"}, \"sun\": null}") @map("business_hours")
   voiceId               String?  @default("21m00Tcm4TlvDq8ikWAM") @map("voice_id")
-  phoneNumberProvider   String   @default("byon") @map("phone_number_provider") // "han_twilio" | "byon"
+  phoneNumberProvider   String   @default("byon") @map("phone_number_provider") // "han_pool" | "han_twilio" | "byon"
   phoneNumberSid        String?  @map("phone_number_sid")   // Twilio SID — for management/release
-  whatsappProvider      String   @default("byon") @map("whatsapp_provider")     // "byon" only for now
+  whatsappProvider      String   @default("byon") @map("whatsapp_provider")     // "han_pool" | "byon"
   isActive              Boolean  @default(true) @map("is_active")
   subscriptionCode      String?  @map("subscription_code")    // Paystack subscription code (e.g. SUB_xxx)
   subscriptionStatus    String   @default("none") @map("subscription_status") // "none" | "active" | "payment_failed" | "cancelled"
   plan           String   @default("trial") @map("plan")
   trialEndsAt    DateTime @default(dbgenerated("now() + interval '14 days'")) @map("trial_ends_at")
-  monthlyCallCount  Int   @default(0) @map("monthly_call_count")
-  callCountResetAt  DateTime @default(dbgenerated("date_trunc('month', now()) + interval '1 month'")) @map("call_count_reset_at")
+  monthlyCallCount    Int      @default(0) @map("monthly_call_count")
+  callCountResetAt    DateTime @default(dbgenerated("date_trunc('month', now()) + interval '1 month'")) @map("call_count_reset_at")
+  missedCallCallback  Boolean  @default(false) @map("missed_call_callback")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  customers     Customer[]
-  conversations Conversation[]
-  aiUsage       AiUsage[]
-  faqTemplates  FaqTemplate[]
+  customers      Customer[]
+  conversations  Conversation[]
+  aiUsage        AiUsage[]
+  faqTemplates   FaqTemplate[]
+  poolNumber     PhoneNumberPool?
+  campaigns      Campaign[]
+  scheduledCalls ScheduledCall[]
 
   @@map("businesses")
+}
+
+model PhoneNumberPool {
+  id                 String    @id @default(cuid())
+  phoneNumber        String    @unique @map("phone_number")
+  twilioSid          String    @unique @map("twilio_sid")
+  whatsappSid        String?   @map("whatsapp_sid")
+  whatsappReady      Boolean   @default(false) @map("whatsapp_ready")
+  assignedBusinessId String?   @unique @map("assigned_business_id") @db.Uuid
+  assignedAt         DateTime? @map("assigned_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  business Business? @relation(fields: [assignedBusinessId], references: [id], onDelete: SetNull)
+
+  @@map("phone_number_pool")
 }
 
 model Customer {
@@ -51,8 +70,10 @@ model Customer {
   lastSeenAt           DateTime? @map("last_seen_at")
   createdAt            DateTime  @default(now()) @map("created_at")
 
-  business      Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  conversations Conversation[]
+  business       Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  conversations  Conversation[]
+  campaignCalls  CampaignCall[]
+  scheduledCalls ScheduledCall[]
 
   @@unique([businessId, phoneNumber])
   @@map("customers")
@@ -63,6 +84,7 @@ model Conversation {
   businessId   String    @map("business_id") @db.Uuid
   customerId   String    @map("customer_id") @db.Uuid
   channel      String    @default("whatsapp")
+  direction    String    @default("inbound")
   status       String    @default("active")
   summary      String?
   messageCount Int       @default(0) @map("message_count")
@@ -124,4 +146,53 @@ model FaqTemplate {
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@map("faq_templates")
+}
+
+model Campaign {
+  id          String         @id @default(cuid())
+  businessId  String         @map("business_id") @db.Uuid
+  message     String
+  status      String         @default("pending") // "pending" | "running" | "completed" | "failed"
+  totalCalls  Int            @default(0) @map("total_calls")
+  sentCalls   Int            @default(0) @map("sent_calls")
+  failedCalls Int            @default(0) @map("failed_calls")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  completedAt DateTime?      @map("completed_at")
+
+  business Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  calls    CampaignCall[]
+
+  @@map("campaigns")
+}
+
+model CampaignCall {
+  id            String   @id @default(cuid())
+  campaignId    String   @map("campaign_id")
+  customerId    String   @map("customer_id") @db.Uuid
+  phoneNumber   String   @map("phone_number")
+  status        String   @default("pending") // "pending" | "calling" | "answered" | "no-answer" | "failed"
+  twilioCallSid String?  @map("twilio_call_sid")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  campaign Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  customer Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("campaign_calls")
+}
+
+model ScheduledCall {
+  id            String    @id @default(cuid())
+  businessId    String    @map("business_id") @db.Uuid
+  customerId    String?   @map("customer_id") @db.Uuid
+  phoneNumber   String    @map("phone_number")
+  message       String
+  scheduledAt   DateTime  @map("scheduled_at")
+  status        String    @default("pending") // "pending" | "sent" | "failed" | "cancelled"
+  twilioCallSid String?   @map("twilio_call_sid")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@map("scheduled_calls")
 }
